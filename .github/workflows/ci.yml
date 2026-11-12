@@ -1,0 +1,19 @@
+# Placeholder CI workflow
+# This will be implemented in PUB-10
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "CI workflow placeholder — to be implemented in PUB-10"

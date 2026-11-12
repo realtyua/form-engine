@@ -1,0 +1,18 @@
+Form Engine
+Copyright (c) 2026 Form Engine Contributors
+
+This product includes software developed by the Form Engine Contributors.
+
+This software is licensed under the MIT License. See LICENSE for the full license text.
+
+---
+
+The following components are included in this project:
+
+- Form Engine Runtime (runtime/) — Copyright (c) 2026 Form Engine Contributors, MIT License
+- Jekyll Adapter (adapters/jekyll/) — Copyright (c) 2026 Form Engine Contributors, MIT License
+- Eleventy Adapter (adapters/eleventy/) — Copyright (c) 2026 Form Engine Contributors, MIT License
+- Tools & Schema (tools/, schema/) — Copyright (c) 2026 Form Engine Contributors, MIT License
+- Test Suite (test/) — Copyright (c) 2026 Form Engine Contributors, MIT License
+
+All components are licensed under the MIT License.
