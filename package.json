@@ -22,12 +22,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/form-engine/form-engine.git"
+    "url": "https://github.com/realtyua/form-engine.git"
   },
   "bugs": {
-    "url": "https://github.com/form-engine/form-engine/issues"
+    "url": "https://github.com/realtyua/form-engine/issues"
   },
-  "homepage": "https://github.com/form-engine/form-engine#readme",
+  "homepage": "https://github.com/realtyua/form-engine#readme",
   "engines": {
     "node": ">=20"
   }
