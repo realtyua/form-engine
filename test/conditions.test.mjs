@@ -8,7 +8,7 @@ import {
   matchesValueCondition,
   matchesValues,
   resolveConditionalText,
-} from '../assets/js/form-engine/conditions.js';
+} from '../runtime/conditions.js';
 
 const read = (data) => (path) => getDataValue(data, path);
 

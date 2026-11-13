@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FormRender } from '../assets/js/form-engine/render.js';
+import { FormRender } from '../runtime/render.js';
 
 const form = (fields, { settings = {}, step, data, theme } = {}) =>
   FormRender.render(

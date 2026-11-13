@@ -1,0 +1,12 @@
+baseurl: ''
+usd: 43.50
+eur: 51.50
+nbu: 43.2413
+turnstile_enabled: false
+turnstile_sitekey: '0x4AAAAAAFK5oHx0Im_YJgMa'
+turnstile_language: 'uk-ua'
+turnstile_retry_interval: 8000
+turnstile_max_retries: 3
+turnstile_local_hosts: ['localhost', '127.0.0.1', '0.0.0.0', '::1']
+add_property_endpoint: 'https://add-property-worker.example.test'
+notify_endpoint: 'https://notify-worker.example.test'

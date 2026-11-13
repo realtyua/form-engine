@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { makeController } from '../assets/js/form-engine/controller.js';
+import { makeController } from '../runtime/controller.js';
 
 const config = {
   version: 1,

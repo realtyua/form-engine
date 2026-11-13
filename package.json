@@ -1,14 +1,35 @@
 {
   "name": "form-engine",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Declarative form engine with Jekyll and Eleventy adapters",
   "type": "module",
+  "main": "./runtime/app.js",
+  "module": "./runtime/app.js",
+  "exports": {
+    ".": "./runtime/app.js",
+    "./runtime/*": "./runtime/*",
+    "./schema/form-config.schema.json": "./schema/form-config.schema.json",
+    "./adapters/jekyll/*": "./adapters/jekyll/*",
+    "./adapters/eleventy/*": "./adapters/eleventy/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "runtime/",
+    "adapters/",
+    "tools/",
+    "schema/",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
   "scripts": {
     "test": "node --test --test-force-exit --test-timeout=60000 --test-concurrency=2 \"test/**/*.test.mjs\"",
-    "validate": "node tools/validate-config.mjs",
-    "check": "node tools/check.mjs",
-    "verify-render": "powershell -File tools/verify-render.ps1 verify"
+    "test:packaging": "node --test test/packaging.test.mjs",
+    "test:jekyll": "node --test --test-force-exit --test-timeout=120000 \"adapters/jekyll/test/**/*.test.mjs\"",
+    "test:eleventy": "node --test --test-force-exit --test-timeout=60000 \"adapters/eleventy/test/**/*.test.mjs\"",
+    "validate": "node tools/validate-config.mjs"
   },
   "keywords": [
     "form",
