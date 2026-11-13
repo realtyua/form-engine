@@ -31,13 +31,13 @@ import {
   locationPreset,
   matchesValues,
   locationReadonly,
-} from '../assets/js/form-engine/data.js';
+} from '../runtime/data.js';
 import {
   buildPayload,
   toFormData,
   AP_ERROR_TEXTS,
   AP_ERROR_GENERIC,
-} from '../assets/js/form-engine/submit.js';
+} from '../runtime/submit.js';
 
 const WIDGET = { name: 'location_widget', type: 'widgets', widget: 'location', settings: { method: 'two' }, fields: [
   { name: 'region', children: 'regions' },

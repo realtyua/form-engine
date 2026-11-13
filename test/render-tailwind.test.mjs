@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { FormRender } from '../assets/js/form-engine/render.js';
+import { FormRender } from '../runtime/render.js';
 
 // The Tailwind theme is the functional sibling of bootstrap4: same config in,
 // same ids and data-* hooks out, different presentation classes. These tests

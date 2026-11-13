@@ -7,7 +7,7 @@ import {
   eachField,
   hasWidget,
   stepFields,
-} from '../assets/js/form-engine/model.js';
+} from '../runtime/model.js';
 
 // Four levels deep, the shape confirmed against add-property.yml:
 // steps[] -> rows[] -> cols[] -> rows[] -> fields[]

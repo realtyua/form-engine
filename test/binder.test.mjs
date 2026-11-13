@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { makeController } from '../assets/js/form-engine/controller.js';
-import { bindForm } from '../assets/js/form-engine/binder.js';
-import { bootstrap4 } from '../assets/js/form-engine/themes/bootstrap4.js';
-import { tailwind } from '../assets/js/form-engine/themes/tailwind.js';
+import { makeController } from '../runtime/controller.js';
+import { bindForm } from '../runtime/binder.js';
+import { bootstrap4 } from '../runtime/themes/bootstrap4.js';
+import { tailwind } from '../runtime/themes/tailwind.js';
 
 // ----------------------------------------------------------- element shim ----
 

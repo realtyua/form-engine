@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Validates a form config against _form-engine/schema/form-config.schema.json.
+// Validates a form config against schema/form-config.schema.json.
 //
-//   node _form-engine/tools/validate-config.mjs _data/add-property.yml
-//   node _form-engine/tools/validate-config.mjs _data/add-property.yml --strict
-//   node _form-engine/tools/validate-config.mjs assets/data/form-config.json
+//   node tools/validate-config.mjs _data/add-property.yml
+//   node tools/validate-config.mjs _data/add-property.yml --strict
+//   node tools/validate-config.mjs assets/data/form-config.json
 //
 // No npm dependencies on purpose: the same check has to run in CI, in an editor
 // task and inside the browser runtime without a package install. YAML is read
@@ -17,14 +17,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, resolve } from 'node:path';
 import { loadYaml } from './yaml.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const SCHEMA_PATH = join(ROOT, '_form-engine', 'schema', 'form-config.schema.json');
+const SCHEMA_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'schema', 'form-config.schema.json');
 
 const args = process.argv.slice(2);
 const strict = args.includes('--strict');
 const target = args.find((a) => !a.startsWith('--'));
 if (!target) {
-  console.error('usage: node _form-engine/tools/validate-config.mjs <config.yml|config.json> [--strict]');
+  console.error('usage: node tools/validate-config.mjs <config.yml|config.json> [--strict]');
   process.exit(2);
 }
 

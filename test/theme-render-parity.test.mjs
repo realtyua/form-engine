@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseHTML } from 'linkedom';
 
-import { FormRender } from '../assets/js/form-engine/render.js';
+import { FormRender } from '../runtime/render.js';
 
 // One config must produce one contract in both themes. Presentation may differ,
 // but the ids the labels point at, the data-* hooks the controller/binder/page
