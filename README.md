@@ -16,8 +16,8 @@
 | [Jekyll Example](examples/jekyll/) | Self-contained Jekyll site with Bootstrap 4 theme |
 | [Eleventy Example](examples/eleventy/) | Self-contained 11ty site with Tailwind theme |
 | [Config Reference](docs/config-reference.md) | Complete YAML schema (PUB-9) |
-| [Theming Guide](docs/theming.md) | Bootstrap 4 / Tailwind customization (PUB-9) |
-| [Migration Guide](docs/migration.md) | From legacy partials to declarative (PUB-9) |
+| [Theming Guide](docs/theming-guide.md) | Bootstrap 4 / Tailwind customization (PUB-9) |
+| [Migration Guide](docs/migration-guide.md) | From legacy partials to declarative (PUB-9) |
 
 ---
 
@@ -322,7 +322,7 @@ form-engine/
 
 **Switching themes:** Change `theme` in your form YAML. The baked fragment and runtime both respect it — no code changes needed.
 
-**Customizing:** Extend `themeTokens` in your config (see [Theming Guide](docs/theming.md) — PUB-9).
+**Customizing:** Extend `themeTokens` in your config (see [Theming Guide](docs/theming-guide.md) — PUB-9).
 
 ---
 
@@ -356,8 +356,8 @@ npm run build
 Detailed documentation is maintained in `docs/` (PUB-9):
 
 - [`docs/config-reference.md`](docs/config-reference.md) — Complete YAML schema with examples
-- [`docs/theming.md`](docs/theming.md) — Theme tokens, custom CSS, extending widgets
-- [`docs/migration.md`](docs/migration.md) — From legacy `_includes/form/**` partials to declarative forms
+- [`docs/theming-guide.md`](docs/theming-guide.md) — Theme tokens, custom CSS, extending widgets
+- [`docs/migration-guide.md`](docs/migration-guide.md) — From legacy `_includes/form/**` partials to declarative forms
 
 ---
 
