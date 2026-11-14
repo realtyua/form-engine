@@ -1,7 +1,6 @@
 {
-  "name": "form-engine",
+  "name": "@realtyua/form-engine",
   "version": "1.0.0",
-  "private": true,
   "description": "Declarative form engine with Jekyll and Eleventy adapters",
   "type": "module",
   "main": "./runtime/app.js",
@@ -24,6 +23,10 @@
     "NOTICE",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "test": "node --test --test-force-exit --test-timeout=60000 --test-concurrency=2 \"test/**/*.test.mjs\"",
     "test:packaging": "node --test test/packaging.test.mjs",

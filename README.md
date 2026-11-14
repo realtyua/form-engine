@@ -2,8 +2,9 @@
 
 > Declarative form engine with Jekyll and Eleventy adapters — zero-API, YAML-driven, two themes.
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)](#scripts--gates)
-[![Tests](https://img.shields.io/badge/tests-183%2F183-brightgreen)](#scripts--gates)
+[![CI](https://github.com/realtyua/form-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/realtyua/form-engine/actions/workflows/ci.yml)
+[![Release](https://github.com/realtyua/form-engine/actions/workflows/release.yml/badge.svg)](https://github.com/realtyua/form-engine/actions/workflows/release.yml)
+[![npm version](https://img.shields.io/npm/v/form-engine.svg)](https://www.npmjs.com/package/form-engine)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node ≥ 20](https://img.shields.io/badge/node-%E2%89%A520-brightgreen)](#installation)
 
@@ -23,11 +24,12 @@
 
 ## Installation
 
-Form Engine is published as a private package. Until the public release (PUB-10), install from GitHub:
-
 ```sh
-# From GitHub (requires auth for private repo)
-npm install github:your-org/form-engine#v1.0.0
+# From npm (public registry)
+npm install @realtyua/form-engine
+
+# Or from GitHub (specific tag)
+npm install github:realtyua/form-engine#v1.0.0
 
 # Or locally during development
 npm install /path/to/form-engine
@@ -164,7 +166,7 @@ The `_plugins/form_engine.rb` hook runs on every build:
   "dependencies": {
     "@11ty/eleventy": "^3.0.0",
     "js-yaml": "^4.1.0",
-    "form-engine": "file:../form-engine"
+    "@realtyua/form-engine": "file:../form-engine"
   }
 }
 ```
@@ -173,7 +175,7 @@ The `_plugins/form_engine.rb` hook runs on every build:
 
 ```js
 // .eleventy.js
-import formEngine from "form-engine/adapters/eleventy/lib/form-engine.js";
+import formEngine from "@realtyua/form-engine/adapters/eleventy/lib/form-engine.js";
 
 export default function (eleventyConfig) {
   // Passthrough copy the runtime (served at /assets/js/form-engine/)

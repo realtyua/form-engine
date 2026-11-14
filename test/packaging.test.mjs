@@ -18,11 +18,11 @@ const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const exists = (relative) => existsSync(resolve(ROOT, relative));
 
 test('package identity is stable', () => {
-  assert.equal(pkg.name, 'form-engine');
+  assert.equal(pkg.name, '@realtyua/form-engine');
   assert.equal(pkg.type, 'module');
   assert.equal(pkg.license, 'MIT');
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
-  assert.equal(pkg.private, true, 'private stays true until PUB-10 decides the release channel');
+  assert.equal(pkg.private, undefined, 'private must be absent for public npm package');
 });
 
 test('every exports target exists in the package', () => {
@@ -55,10 +55,10 @@ test('the version matches the newest changelog release', () => {
 });
 
 test('the declared entry points resolve', async () => {
-  const entry = await import('form-engine');
+  const entry = await import('@realtyua/form-engine');
   assert.equal(typeof entry.boot, 'function', 'the package root must expose boot()');
 
-  const render = await import('form-engine/runtime/render.js');
+  const render = await import('@realtyua/form-engine/runtime/render.js');
   assert.equal(typeof render.FormRender.render, 'function', 'runtime/render.js must be importable');
 
   const schema = JSON.parse(readFileSync(join(ROOT, 'schema/form-config.schema.json'), 'utf8'));
