@@ -1,0 +1,34 @@
+# Minimal Jekyll site config for the Form Engine example.
+#
+# The engine is deliberately site-agnostic: a form config carries no URL, no
+# rates and no copy. The adapter (here: _form-engine/tools/site-opts.mjs, read
+# by _plugins/form_engine.rb) is what knows the site, so those values live here.
+
+title: Form Engine — Jekyll example
+description: Мінімальний Jekyll-сайт з однією демонстраційною формою.
+
+# Where the demo form submits. The plugin resolves the endpoint as
+# "<id>_endpoint" (or config.submit.action) — see _plugins/form_engine.rb.
+demo_endpoint: /api/demo
+
+# Cloudflare Turnstile is optional; the demo has no captcha widget, so it is off.
+turnstile_enabled: false
+
+# Currency rates the price widgets read (kept for completeness).
+usd: 43.50
+eur: 51.50
+nbu: 43.2413
+
+baseurl: ''
+
+# Setting `exclude` replaces Jekyll's defaults, so the list repeats them and
+# adds README.md (otherwise Jekyll copies it into _site/). Underscore dirs
+# (_data, _layouts, _includes, _plugins, _form-engine) are auto-excluded.
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .sass-cache
+  - .jekyll-cache

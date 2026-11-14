@@ -1,0 +1,8 @@
+_site/
+.jekyll-cache/
+.jekyll-metadata
+Gemfile.lock
+
+# Baked form fragments are generated on every build
+# (see _plugins/form_engine.rb); only the directory is tracked.
+_includes/form/app/*.html

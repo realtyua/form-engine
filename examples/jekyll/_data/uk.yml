@@ -1,0 +1,14 @@
+# Ukrainian chrome copy the Jekyll adapter (site-opts.mjs) reads for every form.
+#
+# shell.js merges `{...DEFAULT_COPY, ...opts.copy, ...config.chrome}`, and a
+# key present here as `undefined` would blank the default. So every key below is
+# required, not optional.
+previous: Назад
+next: Далі
+notify_submit: Надіслати
+add_property_success: Форму надіслано
+add_property_success_text: Дякуємо! Ми отримали ваші дані.
+add_property_error_title: Не вдалося надіслати форму
+add_property_error_code: Код помилки
+add_property_retry: Спробувати знову
+close: Закрити

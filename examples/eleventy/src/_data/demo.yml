@@ -1,0 +1,83 @@
+# Demo form for the Eleventy example (Tailwind theme).
+#
+# Validates with (from the package root):
+#   node tools/validate-config.mjs examples/eleventy/src/_data/demo.yml --strict
+#
+# The adapter (lib/form-engine.js) bakes it at build time and demo.njk mounts
+# it with `{% formApp "demo" %}`.
+version: 1
+id: demo
+theme: tailwind
+
+settings:
+  title: Демонстраційна форма
+  description: |
+    Мінімальний приклад форми на Form Engine: текстове поле, вибір,
+    чекбокс і підказка. Заповніть поля й натисніть «Надіслати».
+  feedback:
+    valid: Виглядає добре!
+    invalid: Будь ласка, перевірте це поле
+    pattern: Неприпустимі символи
+  required:
+    marker: '*'
+    tooltip: Це поле обов'язкове
+    message: Будь ласка, заповніть це поле
+    class: text-red-600 text-sm font-bold
+
+steps:
+  - id: form
+    title: Демо-форма
+    rows:
+      - class: row
+        cols:
+          - class: col-12
+            rows:
+              - class: row
+                fields:
+                  - name: demo_intro
+                    type: alert
+                    variant: info
+                    label: Це демонстраційна форма. Дані нікуди не надсилаються.
+                    col: col-12
+
+              - class: row
+                fields:
+                  - name: full_name
+                    type: text
+                    required: true
+                    label: Ім'я
+                    placeholder: Ваше ім'я
+                    col: col-12 col-md-6
+                    minlength: 2
+                    maxlength: 60
+                    feedback:
+                      valid: Дякуємо!
+                      invalid: Введіть ім'я (щонайменше 2 символи)
+
+                  - name: topic
+                    type: select
+                    required: true
+                    label: Тема звернення
+                    placeholder: Оберіть тему...
+                    col: col-12 col-md-6
+                    options:
+                      - value: question
+                        label: Запитання
+                      - value: feedback
+                        label: Відгук
+                      - value: other
+                        label: Інше
+                    feedback:
+                      valid: Тему обрано
+                      invalid: Оберіть тему
+
+              - class: row
+                fields:
+                  - name: agree
+                    type: checkbox
+                    required: true
+                    label: Погоджуюсь з умовами використання
+                    col: col-12
+                    feedback:
+                      valid: Дякуємо!
+                      invalid: Без згоди надіслати форму неможливо
