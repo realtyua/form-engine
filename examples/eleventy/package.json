@@ -1,0 +1,16 @@
+{
+  "name": "form-engine-example-eleventy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Eleventy site with one Form Engine demo form",
+  "scripts": {
+    "build": "eleventy",
+    "serve": "eleventy --serve"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^2.0.1"
+  }
+}

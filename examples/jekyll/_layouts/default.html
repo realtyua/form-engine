@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title | default: site.title }}</title>
+    <!-- The engine skin is inlined into the baked fragment; the framework base
+         stylesheet is the site's job. Swap this <link> for a local copy to run
+         fully offline. -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.6.2/css/bootstrap.min.css">
+  </head>
+  <body class="bg-light">
+    <main class="container py-5">
+      {{ content }}
+    </main>
+  </body>
+</html>
