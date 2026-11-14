@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/realtyua/form-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/realtyua/form-engine/actions/workflows/ci.yml)
 [![Release](https://github.com/realtyua/form-engine/actions/workflows/release.yml/badge.svg)](https://github.com/realtyua/form-engine/actions/workflows/release.yml)
-[![npm version](https://img.shields.io/npm/v/form-engine.svg)](https://www.npmjs.com/package/form-engine)
+[![npm version](https://img.shields.io/npm/v/@realtyua/form-engine.svg)](https://www.npmjs.com/package/@realtyua/form-engine)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node ≥ 20](https://img.shields.io/badge/node-%E2%89%A520-brightgreen)](#installation)
 
