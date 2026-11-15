@@ -7,12 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-15
+
 ### Fixed
 
 - `runtime/package.json` (`{"type":"module"}`) now ships with the package, so a
   host site that copies `runtime/` out of the tarball loads it as ES modules
   without creating the marker by hand. Without it the Jekyll bake tool failed
   with `Named export 'renderPage' not found` (PUB-12 F1).
+- Eleventy adapter (`adapters/eleventy/lib/form-engine.js`) rewritten as ESM
+  (`import`/`export default`) with optional `opts` (`engineDir`, `dataDir`,
+  `siteDir`, `site`) so it can be imported directly from the package and does
+  not depend on site-specific paths (PUB-12 F3, F4).
+- README / migration guide / theming guide: all passthrough and copy paths
+  updated to `@realtyua/form-engine` (scoped name); schema copy path fixed to
+  root `schema/` (PUB-12 F2, F5).
+- Dependency statement clarified: runtime is zero-deps; tools/adapters pull
+  `iconv-lite`, `js-yaml`, `linkedom` (PUB-12 F6).
 
 ## [1.0.0] - 2026-11-13
 
