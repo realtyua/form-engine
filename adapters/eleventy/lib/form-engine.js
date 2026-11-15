@@ -4,8 +4,7 @@
 // form config in src/_data/<name>.yml (the 11ty twin of Jekyll's
 // _data/<name>.yml) is baked at build time into one self-contained fragment -
 // config island, chrome, the rendered form, addon modals and the module loader
-// (assets/js/form-engine/shell.js -> renderPage, assets/js/form-engine/app.js
-// as the single entry).
+// (runtime/shell.js -> renderPage, runtime/app.js as the single entry).
 //
 // The difference is only how the fragment reaches the page. Jekyll writes a
 // Liquid include; Nunjucks would re-parse that include and choke on the JSON,
@@ -21,6 +20,10 @@
 // Like the Jekyll adapter it inlines the Leaflet blobs (src/assets/vendor/
 // leaflet.{js,css}) when a form carries a map widget, so the map works without
 // any network or extra <link>/<script> in the page layout.
+//
+// The adapter is published as part of @realtyua/form-engine and defaults to the
+// package's runtime directory. A site can override engineDir, dataDir, siteDir
+// and site (endpoints) via the options object passed to registerForms.
 
 import fs from 'fs';
 import path from 'path';
@@ -30,10 +33,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Default paths relative to the site root (process.cwd() by default)
+// Default paths. The engine directory defaults to the package's runtime (not the
+// site's copy), so the adapter works when imported from the published package
+// without requiring the site to copy the runtime first.
 const DEFAULT_SITE_DIR = process.cwd();
 const DEFAULT_DATA_DIR = path.join(DEFAULT_SITE_DIR, 'src', '_data');
-const DEFAULT_ENGINE_DIR = path.join(DEFAULT_SITE_DIR, 'src', 'assets', 'js', 'form-engine');
+const DEFAULT_ENGINE_DIR = path.join(__dirname, '..', '..', '..', 'runtime');
 
 // Site-specific submit endpoints, keyed by form id. The config stays
 // site-agnostic - it never carries a worker URL - so the adapter is the only
