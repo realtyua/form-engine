@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { loadYaml } from '../tools/yaml.mjs';
 
@@ -89,7 +89,8 @@ test('the Jekyll demo page opts into the baked fragment', () => {
 });
 
 test('the Eleventy example registers {% formApp "demo" %} and returns the fragment', async () => {
-  const registerForms = require(join(ELEVENTY, 'lib', 'form-engine.js'));
+  const adapterPath = pathToFileURL(join(ELEVENTY, 'lib', 'form-engine.js')).href;
+  const { default: registerForms } = await import(adapterPath);
 
   const handlers = {};
   const shortcodes = {};
@@ -100,7 +101,14 @@ test('the Eleventy example registers {% formApp "demo" %} and returns the fragme
     addWatchTarget() {},
   };
 
-  registerForms(fake);
+  // Pass options to match the example's .eleventy.js config
+  await registerForms(fake, {
+    siteDir: ELEVENTY,
+    dataDir: join(ELEVENTY, 'src', '_data'),
+    engineDir: join(ELEVENTY, 'src', 'assets', 'js', 'form-engine'),
+    site: { demoEndpoint: '/api/demo' },
+  });
+
   assert.equal(typeof handlers.beforeBuild, 'function', 'adapter hooks beforeBuild');
   assert.equal(typeof shortcodes.formApp, 'function', 'adapter registers formApp');
 

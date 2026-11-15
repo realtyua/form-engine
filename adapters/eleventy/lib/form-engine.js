@@ -22,28 +22,43 @@
 // leaflet.{js,css}) when a form carries a map widget, so the map works without
 // any network or extra <link>/<script> in the page layout.
 
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { pathToFileURL } = require('url');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 
-const REPO = path.resolve(__dirname, '..');
-const DATA_DIR = path.join(REPO, 'src', '_data');
-const ENGINE_DIR = path.join(REPO, 'src', 'assets', 'js', 'form-engine');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Default paths relative to the site root (process.cwd() by default)
+const DEFAULT_SITE_DIR = process.cwd();
+const DEFAULT_DATA_DIR = path.join(DEFAULT_SITE_DIR, 'src', '_data');
+const DEFAULT_ENGINE_DIR = path.join(DEFAULT_SITE_DIR, 'src', 'assets', 'js', 'form-engine');
 
 // Site-specific submit endpoints, keyed by form id. The config stays
 // site-agnostic - it never carries a worker URL - so the adapter is the only
 // place that knows where this site sends each form.
-const SITE = require('../src/_data/site.js');
-const ENDPOINTS = {
-  'add-property': SITE.addPropertyEndpoint,
-  'demo': SITE.demoEndpoint || '/api/demo',
-  'notify': SITE.notifyEndpoint,
-};
+async function loadSiteConfig(siteDir) {
+  const sitePath = path.join(siteDir, 'src', '_data', 'site.js');
+  if (fs.existsSync(sitePath)) {
+    const { default: site } = await import(pathToFileURL(sitePath).href);
+    return site;
+  }
+  // Defaults for compatibility with reifua and other sites
+  return {
+    addPropertyEndpoint: '/api/add-property',
+    demoEndpoint: '/api/demo',
+    notifyEndpoint: '/api/notify',
+  };
+}
 
-function endpointFor(name, config) {
+function pathToFileURL(filePath) {
+  return new URL(`file://${filePath.replace(/\\/g, '/')}`);
+}
+
+function endpointFor(name, config, endpoints) {
   if (config.submit && config.submit.action) return config.submit.action;
-  return ENDPOINTS[name];
+  return endpoints[name];
 }
 
 // The same shape guard the Jekyll plugin uses: a file in _data is a form only
@@ -63,8 +78,8 @@ const VENDOR_ASSETS = [
 ];
 
 // Reads one bake asset (Leaflet CSS/JS) as UTF-8, or '' when missing.
-function readVendor(rel) {
-  const full = path.join(REPO, ...rel.split('/'));
+function readVendor(rel, repo) {
+  const full = path.join(repo, ...rel.split('/'));
   return fs.existsSync(full) ? fs.readFileSync(full, 'utf8') : '';
 }
 
@@ -72,23 +87,23 @@ function readVendor(rel) {
 // rebuild of an unchanged engine keeps the same URL (browsers stay warm) and a
 // changed engine busts it. Mirrors _form-engine/tools/site-opts.mjs engineDigest.
 // The inlined Leaflet assets are part of the baked bytes, so they join the hash.
-function engineDigest() {
+function engineDigest(engineDir, repo) {
   const hash = crypto.createHash('sha256');
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith('.js') || entry.name.endsWith('.css')) {
-        hash.update(path.relative(ENGINE_DIR, full).split(path.sep).join('/'));
+        hash.update(path.relative(engineDir, full).split(path.sep).join('/'));
         hash.update('\0');
         hash.update(fs.readFileSync(full));
         hash.update('\0');
       }
     }
   };
-  walk(ENGINE_DIR);
+  walk(engineDir);
   for (const rel of VENDOR_ASSETS) {
-    const full = path.join(REPO, ...rel.split('/'));
+    const full = path.join(repo, ...rel.split('/'));
     if (!fs.existsSync(full)) continue;
     hash.update(rel);
     hash.update('\0');
@@ -98,9 +113,9 @@ function engineDigest() {
   return hash.digest('hex').slice(0, 12);
 }
 
-function formFiles() {
-  if (!fs.existsSync(DATA_DIR)) return [];
-  return fs.readdirSync(DATA_DIR)
+function formFiles(dataDir) {
+  if (!fs.existsSync(dataDir)) return [];
+  return fs.readdirSync(dataDir)
     .filter((file) => /\.ya?ml$/.test(file))
     .sort();
 }
@@ -116,7 +131,19 @@ function safeJson(value) {
     .replace(/\u2029/g, '\\u2029');
 }
 
-module.exports = function registerForms(eleventyConfig) {
+export default async function registerForms(eleventyConfig, opts = {}) {
+  const siteDir = opts.siteDir || DEFAULT_SITE_DIR;
+  const dataDir = opts.dataDir || DEFAULT_DATA_DIR;
+  const engineDir = opts.engineDir || DEFAULT_ENGINE_DIR;
+
+  // Resolve site config
+  const site = opts.site || await loadSiteConfig(siteDir);
+  const endpoints = {
+    'add-property': site.addPropertyEndpoint,
+    'demo': site.demoEndpoint || '/api/demo',
+    'notify': site.notifyEndpoint,
+  };
+
   // name -> the rendered page fragment, and name -> the parsed config behind
   // it. The modal islands are serialized from the parsed configs, never
   // scraped back out of the baked HTML.
@@ -129,20 +156,20 @@ module.exports = function registerForms(eleventyConfig) {
   eleventyConfig.on('beforeBuild', async () => {
     baked.clear();
     configs.clear();
-    if (!formFiles().length) return;
+    if (!formFiles(dataDir).length) return;
 
-    const yaml = require('js-yaml');
-    const { renderPage } = await import(pathToFileURL(path.join(ENGINE_DIR, 'shell.js')).href);
-    const version = engineDigest();
+    const { load: loadYaml } = await import('js-yaml');
+    const { renderPage } = await import(pathToFileURL(path.join(engineDir, 'shell.js')).href);
+    const version = engineDigest(engineDir, siteDir);
 
     // Expose version to templates for cache-busting the engine script.
     if (eleventyConfig.globalData) {
       eleventyConfig.globalData.formEngineVersion = version;
     }
 
-    for (const file of formFiles()) {
+    for (const file of formFiles(dataDir)) {
       const name = file.replace(/\.ya?ml$/, '');
-      const config = yaml.load(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'));
+      const config = loadYaml(fs.readFileSync(path.join(dataDir, file), 'utf8'));
       if (!isFormConfig(config)) continue;
       if (config.id !== name) {
         throw new Error(`src/_data/${file}: id "${config.id}" must match the file name "${name}"`);
@@ -153,10 +180,10 @@ module.exports = function registerForms(eleventyConfig) {
         theme: config.theme,
         base: '',
         version,
-        endpoint: endpointFor(name, config),
+        endpoint: endpointFor(name, config, endpoints),
         rates: config.rates,
-        mapCss: readVendor('src/assets/vendor/leaflet.css'),
-        mapJs: readVendor('src/assets/vendor/leaflet.js'),
+        mapCss: readVendor('src/assets/vendor/leaflet.css', siteDir),
+        mapJs: readVendor('src/assets/vendor/leaflet.js', siteDir),
       }));
     }
   });
@@ -203,6 +230,6 @@ module.exports = function registerForms(eleventyConfig) {
     return safeJson(data);
   });
 
-  eleventyConfig.addWatchTarget(DATA_DIR + path.sep);
-  eleventyConfig.addWatchTarget(ENGINE_DIR + path.sep);
-};
+  eleventyConfig.addWatchTarget(dataDir + path.sep);
+  eleventyConfig.addWatchTarget(engineDir + path.sep);
+}
