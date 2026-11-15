@@ -488,7 +488,7 @@ import formEngine from "./lib/form-engine.js";
 export default function (eleventyConfig) {
   // Passthrough runtime
   eleventyConfig.addPassthroughCopy({
-    "node_modules/form-engine/runtime": "assets/js/form-engine"
+    "node_modules/@realtyua/form-engine/runtime": "assets/js/form-engine"
   });
 
   // Register forms at build time
