@@ -2,6 +2,7 @@
   "name": "form-engine-example-eleventy",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Minimal Eleventy site with one Form Engine demo form",
   "scripts": {
     "build": "eleventy",
