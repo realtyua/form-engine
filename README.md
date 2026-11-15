@@ -39,7 +39,7 @@ npm install /path/to/form-engine
 - Jekyll site: Ruby ≥ 3.1, `jekyll` gem, `js-yaml` (for Node tools)
 - Eleventy site: Node ≥ 20, `@11ty/eleventy`, `js-yaml`
 
-The package itself has **zero runtime dependencies** — the runtime is plain ES modules.
+The package itself has **zero browser-runtime dependencies** — the runtime (`runtime/**`) is plain ES modules with no imports. The `dependencies` in `package.json` (`iconv-lite`, `js-yaml`, `linkedom`) are required by the **tools and adapters** (Node-side validation, baking, YAML parsing) and are not bundled into the browser runtime.
 
 ---
 
@@ -131,7 +131,7 @@ title: Demo Form
 # From form-engine package root:
 cp -r adapters/jekyll/_plugins _plugins
 cp -r adapters/jekyll/tools _form-engine/tools
-cp -r adapters/jekyll/schema _form-engine/schema
+cp -r schema _form-engine/schema
 cp -r runtime assets/js/form-engine
 ```
 
@@ -180,7 +180,7 @@ import formEngine from "@realtyua/form-engine/adapters/eleventy/lib/form-engine.
 export default function (eleventyConfig) {
   // Passthrough copy the runtime (served at /assets/js/form-engine/)
   eleventyConfig.addPassthroughCopy({
-    "node_modules/form-engine/runtime": "assets/js/form-engine"
+    "node_modules/@realtyua/form-engine/runtime": "assets/js/form-engine"
   });
 
   // Register forms before build

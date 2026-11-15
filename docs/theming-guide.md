@@ -232,12 +232,12 @@ The theme emits Tailwind utilities directly. For production, add the theme's `SA
 
 ```js
 // tailwind.config.js
-import { SAFELIST } from './node_modules/form-engine/runtime/themes/tailwind.js';
+import { SAFELIST } from './node_modules/@realtyua/form-engine/runtime/themes/tailwind.js';
 
 export default {
   content: [
     './src/**/*.{html,js,njk}',
-    './node_modules/form-engine/runtime/themes/tailwind.js', // scans SAFELIST
+    './node_modules/@realtyua/form-engine/runtime/themes/tailwind.js', // scans SAFELIST
   ],
   safelist: SAFELIST.split(' '),
   // ...
