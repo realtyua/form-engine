@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,4 +64,25 @@ test('the declared entry points resolve', async () => {
 
   const schema = JSON.parse(readFileSync(join(ROOT, 'schema/form-config.schema.json'), 'utf8'));
   assert.equal(typeof schema, 'object', 'the schema export must be readable JSON');
+});
+
+test('the runtime ships its own ESM marker', async () => {
+  const marker = join(ROOT, 'runtime', 'package.json');
+  assert.ok(existsSync(marker), 'runtime/package.json must exist');
+  assert.equal(
+    JSON.parse(readFileSync(marker, 'utf8')).type,
+    'module',
+    'runtime/package.json must declare "type": "module"',
+  );
+
+  // A host site copies `runtime/` straight out of the tarball, so the marker
+  // only helps if npm actually ships it at `package/runtime/package.json`.
+  const packed = JSON.parse(execSync('npm pack --dry-run --json', { cwd: ROOT, encoding: 'utf8' }));
+  const shipped = packed[0].files.map((entry) => entry.path);
+  assert.ok(shipped.includes('runtime/package.json'), 'npm pack must include runtime/package.json');
+
+  // The marker makes the copied runtime load as ES modules; guard the named
+  // export that failed without it (PUB-12 F1).
+  const shell = await import('@realtyua/form-engine/runtime/shell.js');
+  assert.equal(typeof shell.renderPage, 'function', 'runtime/shell.js must expose renderPage as a named export');
 });

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `runtime/package.json` (`{"type":"module"}`) now ships with the package, so a
+  host site that copies `runtime/` out of the tarball loads it as ES modules
+  without creating the marker by hand. Without it the Jekyll bake tool failed
+  with `Named export 'renderPage' not found` (PUB-12 F1).
+
 ## [1.0.0] - 2026-11-13
 
 First release of the standalone Form Engine package.
