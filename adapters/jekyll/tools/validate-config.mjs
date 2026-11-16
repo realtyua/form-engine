@@ -13,12 +13,11 @@
 // schema keeps `field` open on purpose, so that is where typos hide.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join, extname, resolve } from 'node:path';
+import { extname, resolve } from 'node:path';
 import { loadYaml } from './yaml.mjs';
+import { resolveSchemaPath } from './paths.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const SCHEMA_PATH = join(ROOT, '_form-engine', 'schema', 'form-config.schema.json');
+const SCHEMA_PATH = resolveSchemaPath(import.meta.url);
 
 const args = process.argv.slice(2);
 const strict = args.includes('--strict');

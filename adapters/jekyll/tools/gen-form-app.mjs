@@ -24,12 +24,12 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, join, isAbsolute } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadYaml } from './yaml.mjs';
 import { loadSiteOpts, freshnessSha } from './site-opts.mjs';
-import { renderPage } from '../../assets/js/form-engine/shell.js';
+import { getSiteRoot, importRuntimeModule } from './paths.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = getSiteRoot(import.meta.url);
+const { renderPage } = await importRuntimeModule(import.meta.url, 'shell.js');
 
 function parseArgs(argv) {
   const out = {};

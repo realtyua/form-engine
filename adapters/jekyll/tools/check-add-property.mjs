@@ -22,13 +22,13 @@
 // Pure Node: yml via Ruby (yaml.mjs), the engine imported directly.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { loadYaml } from './yaml.mjs';
-import { FormRender } from '../../assets/js/form-engine/render.js';
-import { inlineMarkdown } from '../../assets/js/form-engine/html.js';
+import { getSiteRoot, importRuntimeModule } from './paths.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = getSiteRoot(import.meta.url);
+const { FormRender } = await importRuntimeModule(import.meta.url, 'render.js');
+const { inlineMarkdown } = await importRuntimeModule(import.meta.url, 'html.js');
 const CONFIG_PATH = join(ROOT, '_data', 'add-property.yml');
 
 // ------------------------------------------------------------------ helpers

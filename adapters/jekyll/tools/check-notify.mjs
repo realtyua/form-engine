@@ -21,11 +21,10 @@
 
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { getSiteRoot, importRuntimeModule } from './paths.mjs';
 
-import { FormRender } from '../../assets/js/form-engine/render.js';
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = getSiteRoot(import.meta.url);
+const { FormRender } = await importRuntimeModule(import.meta.url, 'render.js');
 const siteDir = process.argv[2] || join(ROOT, '_site');
 
 const ALPINE = /\b(x-[a-z]+|@[a-z]+(\.[a-z0-9]+)*|:[a-z-]+)=/;
