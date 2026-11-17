@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-17
+
+### Fixed
+
+- Jekyll adapter tools (`validate-config`, `gen-form-app`, `check-add-property`,
+  `check-notify`) now resolve the site root, the schema and the runtime modules
+  both when they live inside a site (`_form-engine/tools`) and when they are
+  consumed from the installed package. Shared resolution lives in
+  `adapters/jekyll/tools/paths.mjs` (PUB-13 follow-up).
+
 ## [1.0.1] - 2026-11-15
 
 ### Fixed
