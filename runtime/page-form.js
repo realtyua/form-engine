@@ -19,6 +19,25 @@ const DEFAULT_NAV = {
   todo: ['bg-primary', 'text-white'],
 };
 
+// Hover must repaint the existing results, never rebuild them. Replacing the
+// node under the pointer makes Chromium fire mouseenter on its replacement,
+// which re-renders again and again - the item never settles, so the click goes
+// nowhere while the keyboard path (no mouseenter) keeps working.
+function highlightDropdownItem(dropdown, index, input) {
+  if (!dropdown) return;
+  const items = Array.prototype.slice.call(dropdown.querySelectorAll('.dropdown-item'));
+  items.forEach((item, i) => {
+    const active = i === index;
+    item.classList.toggle('highlighted', active);
+    item.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  const active = items[index];
+  if (input) {
+    if (active && active.id) input.setAttribute('aria-activedescendant', active.id);
+    else input.removeAttribute('aria-activedescendant');
+  }
+}
+
 // ------------------------------------------------------------ browser boot ----
 
 /**
@@ -909,7 +928,10 @@ export function bootPage(root, opts = {}) {
         const pick = () => { locationSelectById(fieldName, o.id); };
         btn.addEventListener('mousedown', (e) => { e.preventDefault(); pick(); });
         btn.addEventListener('click', (e) => { e.preventDefault(); pick(); });
-        btn.addEventListener('mouseenter', () => { st.highlightIndex = i; renderLocationDropdown(fieldName, st); });
+        btn.addEventListener('mouseenter', () => {
+          st.highlightIndex = i;
+          highlightDropdownItem(dropdown, i, search);
+        });
         const span = document.createElement('span');
         span.textContent = locationDisplay(o, shoType[fieldName]);
         btn.appendChild(span);
@@ -1543,7 +1565,10 @@ export function bootPage(root, opts = {}) {
           const pick = () => { autocompleteSelect(name, o); };
           btn.addEventListener('mousedown', (e) => { e.preventDefault(); pick(); });
           btn.addEventListener('click', (e) => { e.preventDefault(); pick(); });
-          btn.addEventListener('mouseenter', () => { st.highlightIndex = i; syncAcSearch(name); });
+          btn.addEventListener('mouseenter', () => {
+            st.highlightIndex = i;
+            highlightDropdownItem(dropdown, i, search);
+          });
           btn.textContent = o.name;
           host.appendChild(btn);
         });

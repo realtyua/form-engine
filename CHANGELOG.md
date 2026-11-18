@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `runtime/page-form.js`: hovering an autocomplete or location result no longer
+  rebuilds the dropdown. Replacing the node under the pointer made Chromium fire
+  `mouseenter` on its replacement over and over, so a mouse click never reached
+  the pick handler while keyboard selection kept working. Hover now repaints the
+  highlight in place and keeps the result clickable (PUB-18).
+
 ## [1.0.3] - 2026-11-18
 
 ### Fixed
