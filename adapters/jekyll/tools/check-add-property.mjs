@@ -22,7 +22,7 @@
 // Pure Node: yml via Ruby (yaml.mjs), the engine imported directly.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { resolve, join } from 'node:path';
 import { loadYaml } from './yaml.mjs';
 import { getSiteRoot, importRuntimeModule } from './paths.mjs';
 
