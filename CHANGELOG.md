@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-11-18
+
+### Fixed
+
+- `adapters/jekyll/tools/check-add-property.mjs` now imports `resolve` from
+  `node:path`. Version 1.0.2 moved the tool onto `paths.mjs` and dropped the
+  identifier from the import list, so the gate crashed at load time with
+  `ReferenceError: resolve is not defined` instead of running.
+
 ## [1.0.2] - 2026-11-17
 
 ### Fixed
