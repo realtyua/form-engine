@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-11-18
+
 ### Fixed
 
 - `runtime/page-form.js`: hovering an autocomplete or location result no longer
@@ -75,5 +77,9 @@ First release of the standalone Form Engine package.
 - `package.json` `exports` map for the runtime, schema and adapters.
 - `CHANGELOG.md`.
 
-[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/realtyua/form-engine/compare/v1.0.3...v1.0.4
+[1.0.3]: https://github.com/realtyua/form-engine/compare/v1.0.2...v1.0.3
+[1.0.2]: https://github.com/realtyua/form-engine/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/realtyua/form-engine/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/realtyua/form-engine/releases/tag/v1.0.0
