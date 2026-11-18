@@ -578,6 +578,35 @@ test('method "two" fills the ancestors when the leaf settlement is picked, and c
   assert.equal(ctl.getValue('location_widget.hromada'), '', 'clearing the leaf wipes the hromada ancestor');
 });
 
+test('hovering a location result repaints in place and leaves it clickable', async () => {
+  const { window, document } = mount();
+  const app = await bootLocation(document);
+  assert.ok(app, 'wireAddProperty must boot');
+
+  const search = document.querySelector('input[data-location-search="settlement"]');
+  search.value = 'Івано-Франківськ';
+  fire(window, search, 'input');
+  await flush();
+
+  const dropdown = document.querySelector('[data-location-dropdown="settlement"]');
+  const item = Array.prototype.find.call(
+    dropdown.querySelectorAll('.dropdown-item'),
+    (el) => el.textContent.includes('Івано-Франківськ')
+  );
+  assert.ok(item, 'the settlement dropdown must offer an Івано-Франківськ option');
+
+  item.dispatchEvent(new window.Event('mouseenter'));
+  assert.equal(dropdown.querySelector('.dropdown-item'), item,
+    'hover must not replace the node under the pointer (that loops in Chromium)');
+  assert.equal(item.classList.contains('highlighted'), true, 'the hovered result is highlighted');
+  assert.equal(item.getAttribute('aria-selected'), 'true', 'the hovered result is selected for AT');
+  assert.equal(search.getAttribute('aria-activedescendant'), item.id, 'the search input points at the hovered result');
+
+  item.dispatchEvent(new window.Event('mousedown', { bubbles: true, cancelable: true }));
+  await flush(); await flush();
+  assert.equal(app.controller.getValue('location_widget.settlement'), '30595', 'a mouse pick still stores the value');
+});
+
 for (const readonly of [true, false]) {
   test(`method "two" keeps a preset (readonly: ${readonly}) ancestor when the leaf is cleared`, async () => {
     const { window, document } = mountMethodTwoPresetOblast(readonly);
