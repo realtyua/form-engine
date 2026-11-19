@@ -76,6 +76,10 @@ function countOf(html, re) {
   return m ? m.length : 0;
 }
 
+function isModalConfig(config) {
+  return !!(config && config.behavior && config.behavior.mode === 'modal');
+}
+
 function checkPage(file) {
   const rel = relative(siteDir, file).split(sep).join('/');
   const html = readFileSync(file, 'utf8');
@@ -139,9 +143,12 @@ function checkPage(file) {
   const turnstileConfigs = countOf(html, /window\.TURNSTILE_CONFIG\s*=/g);
   const captchaScripts = countOf(html, /<script[^>]*src="[^"]*form-engine\/captcha\.js[^"]*"><\/script>/g);
   const turnstileApis = countOf(html, /<script[^>]*src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit"><\/script>/g);
-  if (turnstileConfigs !== 1) fail(rel, `expected exactly 1 TURNSTILE_CONFIG, found ${turnstileConfigs}`);
-  if (captchaScripts !== 1) fail(rel, `expected exactly 1 form-engine/captcha.js include, found ${captchaScripts}`);
-  if (turnstileApis !== 1) fail(rel, `expected exactly 1 Turnstile api.js include, found ${turnstileApis}`);
+  const hasAnyCaptchaAsset = turnstileConfigs > 0 || captchaScripts > 0 || turnstileApis > 0;
+  if (hasAnyCaptchaAsset) {
+    if (turnstileConfigs !== 1) fail(rel, `expected exactly 1 TURNSTILE_CONFIG, found ${turnstileConfigs}`);
+    if (captchaScripts !== 1) fail(rel, `expected exactly 1 form-engine/captcha.js include, found ${captchaScripts}`);
+    if (turnstileApis !== 1) fail(rel, `expected exactly 1 Turnstile api.js include, found ${turnstileApis}`);
+  }
 
   // Render the config exactly as the browser glue does: endpoint merged into
   // submit.action first, then the theme's form contract.

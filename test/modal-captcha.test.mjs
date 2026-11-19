@@ -61,6 +61,14 @@ test('renderAssets returns empty when captcha widget is absent or turnstile disa
 test('renderModal emits config island, assets, mount point and app loader without wizard chrome', () => {
   const html = renderModal(baseConfig, { name: 'notify', endpoint: 'https://example.test/notify', turnstile });
   assert.match(html, /<script id="notify-config" type="application\/json">/);
+  const island = html.match(/<script id="notify-config" type="application\/json">([\s\S]*?)<\/script>/);
+  assert.ok(island, 'missing notify-config island');
+  const cfg = JSON.parse(island[1]);
+  assert.equal(cfg.id, 'notify');
+  assert.equal(cfg.version, 1);
+  assert.deepEqual(cfg.behavior, { mode: 'modal' });
+  assert.equal(cfg.theme, 'bootstrap4');
+  assert.ok(Array.isArray(cfg.steps) && cfg.steps.length === 1);
   assert.match(html, /window\.TURNSTILE_CONFIG/);
   assert.match(html, /<script[^>]*src="[^"]*form-engine\/captcha\.js[^"]*"><\/script>/);
   assert.match(html, /<script[^>]*src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit"><\/script>/);
