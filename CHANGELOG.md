@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-11-19
+
+### Fixed
+
+- `runtime/modal-form.js`: config-driven modal boot for `behavior.mode: modal`
+  forms (captcha widget fields via `element_id`/`action`/`token`, submit/status
+  handling, page-context prefill, `dnscheck` for configured email fields, and
+  legacy `notify-*` compatibility) to support target notify configs (MOD-9).
+- `runtime/shell.js`: modal island now includes `id`, `version`, and `behavior`
+  so modal boot/check contracts receive full config metadata.
+- `adapters/jekyll/tools/check-notify.mjs`: captcha asset checks are conditional
+  for modal-baked pages when Turnstile assets are not emitted, while still
+  requiring single includes when present.
+
 ## [1.0.5] - 2026-11-19
 
 ### Added
@@ -96,7 +110,8 @@ First release of the standalone Form Engine package.
 - `package.json` `exports` map for the runtime, schema and adapters.
 - `CHANGELOG.md`.
 
-[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/realtyua/form-engine/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/realtyua/form-engine/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/realtyua/form-engine/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/realtyua/form-engine/compare/v1.0.2...v1.0.3
