@@ -1,6 +1,6 @@
 {
   "name": "@realtyua/form-engine",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Declarative form engine with Jekyll and Eleventy adapters",
   "type": "module",
   "main": "./runtime/app.js",

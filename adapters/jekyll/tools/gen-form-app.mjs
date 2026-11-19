@@ -29,7 +29,7 @@ import { loadSiteOpts, freshnessSha } from './site-opts.mjs';
 import { getSiteRoot, importRuntimeModule } from './paths.mjs';
 
 const ROOT = getSiteRoot(import.meta.url);
-const { renderPage } = await importRuntimeModule(import.meta.url, 'shell.js');
+const { renderPage, renderModal } = await importRuntimeModule(import.meta.url, 'shell.js');
 
 function parseArgs(argv) {
   const out = {};
@@ -80,7 +80,9 @@ if (opts.version) siteOpts.version = opts.version;
 // Generated files are committed with `.gitattributes` `-text`, so write the
 // fragment as LF on every platform. A mixed-EOL bake would show up as a dirty
 // working tree after every build on Windows.
-const html = renderPage(config, { ...siteOpts, name }).replace(/\r\n/g, '\n');
+const mode = config.behavior && config.behavior.mode;
+const render = mode === 'modal' ? renderModal : renderPage;
+const html = render(config, { ...siteOpts, name }).replace(/\r\n/g, '\n');
 
 const liquid = html.match(LIQUID);
 if (liquid) {
