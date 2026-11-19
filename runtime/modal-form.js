@@ -195,11 +195,58 @@ export function bootModal(root, opts = {}) {
   syncCounters();
 
   const captchaFields = findCaptchaFields(config);
+  const captchaWatchTimers = {};
+
+  const controllerSolved = (field) => {
+    const sel = captchaSelector(field);
+    if (!form.querySelector(sel)) return true;
+    return Boolean(Captcha && Captcha.solved && Captcha.solved(sel));
+  };
+
+  const syncCaptchaState = (field) => {
+    if (!Captcha || (Captcha.isLocal && Captcha.isLocal()) || !(Captcha.enabled && Captcha.enabled())) {
+      controller.setCaptchaSolved(field.name, true);
+      return;
+    }
+    const sel = captchaSelector(field);
+    if (controllerSolved(field)) {
+      controller.setCaptchaSolved(field.name, true);
+      controller.setCaptchaToken(field.name, Captcha && Captcha.token ? (Captcha.token(sel) || '') : '');
+    } else {
+      controller.setCaptchaSolved(field.name, false);
+      controller.setCaptchaToken(field.name, '');
+    }
+  };
+
+  const watchCaptchaToken = (field) => {
+    const key = field.name;
+    if (captchaWatchTimers[key]) return;
+    let ticks = 0;
+    const poll = () => {
+      captchaWatchTimers[key] = null;
+      ticks += 1;
+      if (controllerSolved(field)) {
+        syncCaptchaState(field);
+        return;
+      }
+      if (ticks < 100) captchaWatchTimers[key] = later(poll, 250);
+    };
+    captchaWatchTimers[key] = later(poll, 250);
+  };
+
+  const stopCaptchaWatch = () => {
+    for (const key of Object.keys(captchaWatchTimers)) {
+      if (captchaWatchTimers[key]) clearTimeout(captchaWatchTimers[key]);
+      delete captchaWatchTimers[key];
+    }
+  };
+
+  for (const field of captchaFields) syncCaptchaState(field);
+
   const isCaptchaBlocked = () => {
     if (!Captcha || !Captcha.enabled || !Captcha.enabled()) return false;
     for (const field of captchaFields) {
-      const sel = captchaSelector(field);
-      if (Captcha.solved && !Captcha.solved(sel)) return true;
+      if (!controllerSolved(field)) return true;
     }
     return false;
   };
@@ -240,6 +287,7 @@ export function bootModal(root, opts = {}) {
         if (input) input.value = String(value);
       }
     }
+    for (const field of captchaFields) syncCaptchaState(field);
     restoreSubmit();
     syncCounters();
   };
@@ -251,10 +299,13 @@ export function bootModal(root, opts = {}) {
       const action = field.action || field.captchaAction || formName;
       const retryNotice = findById('notify-captcha-retry');
       if (Captcha.isLocal && Captcha.isLocal()) {
+        controller.setCaptchaSolved(field.name, true);
         const notice = findById('notify-local-notice');
         if (notice) notice.classList.remove('d-none');
         continue;
       }
+      controller.setCaptchaSolved(field.name, false);
+      controller.setCaptchaToken(field.name, '');
       const notice = findById('notify-local-notice');
       if (notice) notice.classList.add('d-none');
       if (retryNotice) retryNotice.classList.add('d-none');
@@ -274,6 +325,7 @@ export function bootModal(root, opts = {}) {
           showError('Не вдалося завантажити перевірку.');
         });
         mounted = true;
+        watchCaptchaToken(field);
       } catch {
         later(mountCaptcha, 700);
       }
@@ -282,6 +334,7 @@ export function bootModal(root, opts = {}) {
 
   const unmountCaptcha = () => {
     if (!Captcha) return;
+    stopCaptchaWatch();
     for (const field of captchaFields) {
       try { Captcha.unmount && Captcha.unmount(captchaSelector(field)); } catch {}
     }
@@ -359,6 +412,9 @@ export function bootModal(root, opts = {}) {
     event.preventDefault();
     event.stopPropagation();
 
+    // sync captcha state/tokens to controller before validation
+    for (const field of captchaFields) syncCaptchaState(field);
+
     const valid = controller.validateAll();
     if (isCaptchaBlocked()) {
       showError(CAPTCHA_REQUIRED_TEXT);
@@ -376,7 +432,9 @@ export function bootModal(root, opts = {}) {
     for (const field of captchaFields) {
       const sel = captchaSelector(field);
       const key = captchaTokenKey(field);
-      tokens[key] = Captcha && Captcha.token ? (Captcha.token(sel) || '') : '';
+      const tok = Captcha && Captcha.token ? (Captcha.token(sel) || '') : '';
+      tokens[key] = tok;
+      if (tok) controller.setCaptchaToken(field.name, tok);
     }
     const primaryToken = captchaFields.length ? (tokens[captchaTokenKey(captchaFields[0])] || '') : '';
     const payload = buildJsonPayload(form, controller, primaryToken);
