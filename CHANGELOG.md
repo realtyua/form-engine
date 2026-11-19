@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-11-19
+
+### Fixed
+
+- `runtime/modal-form.js`: sync captcha solved state and token with the
+  controller (poll/watch and sync before validation) for config-driven modal
+  captcha widgets so Turnstile success is recognized on submit (e.g.
+  `element_id: captcha`), preventing false "confirm you are not a robot"
+  errors (MOD-9 follow-up).
+
 ## [1.0.6] - 2026-11-19
 
 ### Fixed
@@ -110,7 +120,8 @@ First release of the standalone Form Engine package.
 - `package.json` `exports` map for the runtime, schema and adapters.
 - `CHANGELOG.md`.
 
-[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/realtyua/form-engine/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/realtyua/form-engine/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/realtyua/form-engine/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/realtyua/form-engine/compare/v1.0.3...v1.0.4
