@@ -52,6 +52,30 @@ function island(html, id) {
   return m ? m[1] : null;
 }
 
+function hasCaptchaWidget(config) {
+  let found = false;
+  const walk = (node) => {
+    if (found) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    if (node.widget === 'captcha') {
+      found = true;
+      return;
+    }
+    for (const value of Object.values(node)) walk(value);
+  };
+  walk(config);
+  return found;
+}
+
+function countOf(html, re) {
+  const m = html.match(re);
+  return m ? m.length : 0;
+}
+
 function checkPage(file) {
   const rel = relative(siteDir, file).split(sep).join('/');
   const html = readFileSync(file, 'utf8');
@@ -80,6 +104,7 @@ function checkPage(file) {
   if (config.id !== 'notify') fail(rel, `config.id is ${JSON.stringify(config.id)}, expected "notify"`);
   if (config.version !== 1) fail(rel, `config.version is ${JSON.stringify(config.version)}, expected 1`);
   if (!Array.isArray(config.steps) || !config.steps.length) fail(rel, 'config has no steps');
+  if (!hasCaptchaWidget(config)) fail(rel, 'config has no widget: captcha field');
 
   const pageRaw = island(html, 'notify-page');
   if (!pageRaw) {
@@ -103,12 +128,20 @@ function checkPage(file) {
     fail(rel, `uid ${uid} does not appear in the built path`);
   }
 
-  if (!/<script type="module"[^>]*src="[^"]*form-engine\/app\.js/.test(html)) {
-    fail(rel, 'missing the form-engine/app.js module include');
+  const appModules = countOf(html, /<script type="module"[^>]*src="[^"]*form-engine\/app\.js[^"]*"><\/script>/g);
+  if (appModules !== 1) {
+    fail(rel, `expected exactly 1 form-engine/app.js module include, found ${appModules}`);
   }
   if (html.includes('/assets/js/notify.js')) {
     fail(rel, 'the legacy notify.js is still included');
   }
+
+  const turnstileConfigs = countOf(html, /window\.TURNSTILE_CONFIG\s*=/g);
+  const captchaScripts = countOf(html, /<script[^>]*src="[^"]*form-engine\/captcha\.js[^"]*"><\/script>/g);
+  const turnstileApis = countOf(html, /<script[^>]*src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit"><\/script>/g);
+  if (turnstileConfigs !== 1) fail(rel, `expected exactly 1 TURNSTILE_CONFIG, found ${turnstileConfigs}`);
+  if (captchaScripts !== 1) fail(rel, `expected exactly 1 form-engine/captcha.js include, found ${captchaScripts}`);
+  if (turnstileApis !== 1) fail(rel, `expected exactly 1 Turnstile api.js include, found ${turnstileApis}`);
 
   // Render the config exactly as the browser glue does: endpoint merged into
   // submit.action first, then the theme's form contract.

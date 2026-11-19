@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-11-19
+
+### Added
+
+- `runtime/shell.js`: exported `renderAssets(config, opts)` with the shared
+  captcha-asset gate and `renderModal(config, opts)` that bakes a modal form
+  fragment (config island, captcha assets when applicable, theme style, empty
+  mount point, and `app.js` loader) without wizard chrome or pre-rendered form
+  markup (MOD-9).
+- `adapters/jekyll/tools/gen-form-app.mjs`: bakes `renderModal` output for
+  configs with `behavior.mode: modal`.
+
+### Changed
+
+- `adapters/jekyll/tools/check-notify.mjs`: requires a `widget: captcha` field
+  in the notify config and asserts exactly one `TURNSTILE_CONFIG`,
+  `form-engine/captcha.js`, Turnstile `api.js`, and `form-engine/app.js` include
+  per checked page (no duplicates).
+
 ## [1.0.4] - 2026-11-18
 
 ### Fixed
@@ -77,7 +96,8 @@ First release of the standalone Form Engine package.
 - `package.json` `exports` map for the runtime, schema and adapters.
 - `CHANGELOG.md`.
 
-[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/realtyua/form-engine/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/realtyua/form-engine/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/realtyua/form-engine/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/realtyua/form-engine/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/realtyua/form-engine/compare/v1.0.1...v1.0.2
