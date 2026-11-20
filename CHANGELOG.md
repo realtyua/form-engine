@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-11-20
+
+### Fixed
+
+- `tools/check-add-property.mjs` and both adapter copies now derive
+  autocomplete and location expectations from the config (`type: autocomplete`,
+  `type: widgets` + `widget: location`) instead of hard-coded field names, so
+  renaming a field no longer breaks the gate (MOD-14).
+- All three wrappers share `tools/check-add-property-core.mjs`. A regression
+  test checks renamed fields and forbids the retired literals in gate sources.
+
 ## [1.0.7] - 2026-11-19
 
 ### Fixed
