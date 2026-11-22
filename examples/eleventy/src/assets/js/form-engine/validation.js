@@ -77,9 +77,27 @@ export function validationMessage(field, key, defKey, hardcoded, ctx) {
 
   if (key === 'required' && field.message) return field.message;
 
+  // Field-level feedback copy is the shared fallback for every rule. Page glue
+  // has always read `field.feedback.pattern`; the validator used to skip it.
+  const fromFeedback = field.feedback ? field.feedback[key] : undefined;
+  if (typeof fromFeedback === 'string') return fromFeedback;
+  if (fromFeedback && typeof fromFeedback === 'object') {
+    return resolveConditionalText(fromFeedback, read, '');
+  }
+
   if (key === 'required') {
     const settingsMessage = ctx.config?.settings?.required?.message;
     if (settingsMessage) return settingsMessage;
+  }
+
+  const settingsFeedback = ctx.config?.settings?.feedback?.[key];
+  if (settingsFeedback) return settingsFeedback;
+
+  if (key === 'pattern') {
+    // Legacy configs call this form-wide copy `patternMessage`; keep it between
+    // settings.feedback.pattern and settings.validation.pattern.
+    const patternMessage = ctx.config?.settings?.patternMessage;
+    if (patternMessage) return patternMessage;
   }
 
   // Per-key defaults for the whole form. The schema does not use this yet, but
@@ -89,6 +107,11 @@ export function validationMessage(field, key, defKey, hardcoded, ctx) {
   if (settingsDefaults && settingsDefaults[defKey]) return settingsDefaults[defKey];
 
   return hardcoded;
+}
+
+/** The message a failed `pattern` rule shows, for validator and page glue alike. */
+export function patternMessage(field, ctx, hardcoded = 'Неправильний формат') {
+  return validationMessage(field, 'pattern', 'pattern', hardcoded, ctx);
 }
 
 /**
@@ -159,9 +182,7 @@ export function fieldError(field, ctx) {
     if (pattern) {
       try {
         if (!new RegExp(pattern).test(value)) {
-          return field.validation?.pattern
-            || ctx.config?.settings?.feedback?.pattern
-            || 'Неправильний формат';
+          return patternMessage(field, ctx);
         }
       } catch {
         // A pattern the config author got wrong must not block the form.
@@ -186,9 +207,9 @@ export function fieldError(field, ctx) {
   if (field.type === 'email' && typeof value === 'string') {
     const at = value.indexOf('@');
     if (at === -1 || at === value.length - 1 || at === 0) {
-      return field.validation?.email
-        || ctx.config?.settings?.feedback?.email
-        || 'Введіть дійсну електронну адресу';
+      return validationMessage(
+        field, 'email', 'email', 'Введіть дійсну електронну адресу', ctx,
+      );
     }
   }
 
