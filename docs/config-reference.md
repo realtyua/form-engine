@@ -350,11 +350,31 @@ behavior:
   mode: "page"                # page | modal (default: page)
   modal: "#my-modal"          # CSS selector of modal element (modal mode)
   seed: "form-data-island"    # JSON island ID for hidden field seeds (modal)
+  reset: true                 # Reset form on the modal show event (default: true)
+  timestamp: "timestamp"      # Field name refreshed on reset
+  submit: "#my-submit"        # Submit control (default: [data-form-submit])
+  status:
+    error: "#my-error"        # Default: [data-form-error]
+    success: "#my-success"    # Default: [data-form-success]
+  notice: "#my-notice"        # Local/notice node (default: [data-form-notice])
+  retry: "#my-retry"          # Captcha retry trigger (default: [data-captcha-retry])
+  retryNotice: "#my-retry-note"  # Default: [data-form-captcha-retry]
+  events:                     # Lifecycle events on the modal element
+    show: "show.bs.modal"
+    shown: "shown.bs.modal"
+    hidden: "hidden.bs.modal"
   success:
-    hide: "#my-modal"         # Element to hide on success
-    show: "#success-toast"    # Element to show on success
-  reset: true                 # Reset form after modal submit
+    hide: "#my-modal"         # Selector or list of selectors to hide on success
+    show: "#success-toast"    # Selector or list of selectors to show on success
 ```
+
+Every hook is optional. The DOM data-* contract (`[data-form-error]`,
+`[data-form-success]`, `[data-form-notice]`, `[data-captcha-retry]`,
+`[data-form-submit]`) is enough for a new modal config; the selectors above only
+override it. The legacy `notify-*` IDs are a compatibility fallback for the
+existing notify form, not a requirement. Captcha fields stay config-driven:
+`element_id`/`name`, `action` (or `submit.captcha.action`) and `token` (or
+`submit.captcha.token`).
 
 ---
 

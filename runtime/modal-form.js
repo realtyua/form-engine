@@ -2,9 +2,11 @@
  * Browser boot for modal forms (behavior.mode: modal).
  *
  * Generic modal runtime: discovers the form island, mounts the rendered form,
- * wires controller/binder and submit lifecycle. Supports config-driven captcha
- * widgets and page-context prefilling. Keeps compatibility with legacy notify
- * selectors/IDs where present.
+ * wires controller/binder and drives a config-driven life-cycle. Nodes, events,
+ * submit/status/retry/notice hooks and captcha settings come from `behavior`
+ * (with DOM data-* hooks as the default contract). The notify IDs are kept only
+ * as a compatibility fallback for the legacy form; a new config never needs
+ * them.
  */
 
 import { FormRender } from './render.js';
@@ -13,8 +15,70 @@ import { bindForm } from './binder.js';
 import { CAPTCHA_REQUIRED_TEXT, counterRemaining, findFieldInConfig, stepFieldNames } from './data.js';
 import { buildJsonPayload } from './submit.js';
 
+const LEGACY_NAME = 'notify';
+const GENERIC_ERROR_TEXT = 'На жаль, сталася помилка. Спробуйте ще раз пізніше.';
+
 function qsa(root, sel) {
   return root && root.querySelectorAll ? Array.prototype.slice.call(root.querySelectorAll(sel)) : [];
+}
+
+function selectorList(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value.filter(Boolean) : [value];
+}
+
+function escapeSelector(value) {
+  const raw = String(value);
+  if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(raw);
+  return raw.replace(/["\\]/g, '\\$&');
+}
+
+/** First node matching a config selector, a DOM hook, or a legacy id. */
+function findNode(form, root, selectors, legacyIds = []) {
+  const list = selectorList(selectors).concat(legacyIds.map((id) => `#${id}`));
+  for (const sel of list) {
+    for (const scope of [form, root]) {
+      if (!scope || !scope.querySelector) continue;
+      let node;
+      try { node = scope.querySelector(sel); } catch { continue; }
+      if (node) return node;
+    }
+    if (sel.startsWith('#') && root && root.getElementById) {
+      const node = root.getElementById(sel.slice(1));
+      if (node) return node;
+    }
+  }
+  return null;
+}
+
+function findNodes(root, selectors) {
+  const out = [];
+  for (const sel of selectorList(selectors)) {
+    if (!root || !root.querySelectorAll) continue;
+    let nodes;
+    try { nodes = root.querySelectorAll(sel); } catch { continue; }
+    for (const node of Array.prototype.slice.call(nodes)) {
+      if (out.indexOf(node) === -1) out.push(node);
+    }
+  }
+  return out;
+}
+
+function modalBehavior(config) {
+  const behavior = (config && config.behavior) || {};
+  return {
+    modal: behavior.modal,
+    seed: behavior.seed,
+    success: behavior.success || {},
+    reset: behavior.reset !== false,
+    submit: behavior.submit,
+    status: behavior.status || {},
+    notice: behavior.notice,
+    retry: behavior.retry,
+    retryNotice: behavior.retryNotice,
+    events: behavior.events || {},
+    timestamp: behavior.timestamp || (config.settings && config.settings.timestampField) || 'timestamp',
+  };
 }
 
 function findCaptchaFields(config) {
@@ -32,20 +96,25 @@ function captchaSelector(field) {
   return `#${id}-widget`;
 }
 
-function captchaTokenKey(field) {
-  return (field && field.token) || 'cf-turnstile-response';
+function captchaTokenKey(field, config) {
+  const configured = config.submit && config.submit.captcha && config.submit.captcha.token;
+  return (field && field.token) || configured || 'cf-turnstile-response';
 }
 
-function ensureStatusEl(form, kind, legacyId) {
-  let el = form.querySelector(`[data-form-${kind}]`);
-  if (!el && legacyId) el = form.querySelector(`#${legacyId}`) || (form.ownerDocument && form.ownerDocument.getElementById(legacyId));
-  if (el) return el;
-  const div = (form.ownerDocument || document).createElement('div');
+function captchaAction(field, config, formName) {
+  const configured = config.submit && config.submit.captcha && config.submit.captcha.action;
+  return (field && (field.action || field.captchaAction)) || configured || formName;
+}
+
+function ensureStatusEl(form, kind) {
+  const doc = form.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc || !doc.createElement) return null;
+  const div = doc.createElement('div');
   if (kind === 'error') {
     div.className = 'alert alert-danger d-none';
     div.setAttribute('role', 'alert');
     div.setAttribute('data-form-error', '');
-  } else if (kind === 'success') {
+  } else {
     div.className = 'alert alert-success d-none';
     div.setAttribute('role', 'alert');
     div.setAttribute('data-form-success', '');
@@ -57,7 +126,8 @@ function ensureStatusEl(form, kind, legacyId) {
 function ensureSubmitButton(form, config) {
   let btn = form.querySelector('button[type="submit"], input[type="submit"]');
   if (btn) return btn;
-  const doc = form.ownerDocument || document;
+  const doc = form.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc || !doc.createElement) return null;
   btn = doc.createElement('button');
   btn.type = 'submit';
   btn.className = 'btn btn-primary mt-2';
@@ -72,7 +142,7 @@ function ensureSubmitButton(form, config) {
 }
 
 /**
- * Boots the modal form.
+ * Boots one modal form.
  * @param {Document} root
  * @param {object} [opts]
  *   {string}   [opts.name]
@@ -87,9 +157,9 @@ export function bootModal(root, opts = {}) {
   const name = opts.name || '';
   let app = name ? root.getElementById(`${name}-app`) : null;
   let configNode = name ? root.getElementById(`${name}-config`) : null;
-  if (!app || !configNode) {
-    app = root.getElementById('notify-app');
-    configNode = root.getElementById('notify-config');
+  if ((!app || !configNode) && (!name || name === LEGACY_NAME)) {
+    app = app || root.getElementById(`${LEGACY_NAME}-app`);
+    configNode = configNode || root.getElementById(`${LEGACY_NAME}-config`);
   }
   if (!app || !configNode) return null;
 
@@ -99,9 +169,14 @@ export function bootModal(root, opts = {}) {
   } catch {
     return null;
   }
-  const formName = name || config.id || (configNode.id || '').replace(/-config$/, '') || 'notify';
+  const legacy = !name || name === LEGACY_NAME || config.id === LEGACY_NAME;
+  const formName = name || config.id || (configNode.id || '').replace(/-config$/, '') || (legacy ? LEGACY_NAME : null);
+  if (!formName) return null;
+  const behavior = modalBehavior(config);
 
-  const pageNode = root.getElementById(`${formName}-page`) || root.getElementById('notify-page');
+  const seedId = behavior.seed || `${formName}-page`;
+  let pageNode = root.getElementById(seedId);
+  if (!pageNode && legacy) pageNode = root.getElementById(`${LEGACY_NAME}-page`);
   let page = {};
   if (pageNode) {
     try { page = JSON.parse(pageNode.textContent) || {}; } catch { page = {}; }
@@ -126,13 +201,33 @@ export function bootModal(root, opts = {}) {
   const fetchImpl = opts.fetch || ((...args) => globalThis.fetch(...args));
   const now = opts.now || (() => Date.now());
   const later = opts.setTimeout || ((fn, ms) => setTimeout(fn, ms));
+  const legacyIds = (id) => (legacy ? [id] : []);
 
-  const findById = (id) => (id ? (form.querySelector(`#${id}`) || root.getElementById(id)) : null);
-  const errorEl = () => form.querySelector('[data-form-error]') || findById('notify-error') || ensureStatusEl(form, 'error', 'notify-error');
-  const successEl = () => form.querySelector('[data-form-success]') || findById('notify-success');
+  const errorSelectors = [behavior.status.error, '[data-form-error]'].filter(Boolean);
+  const successSelectors = [behavior.status.success, '[data-form-success]'].filter(Boolean);
+  const noticeSelectors = [behavior.notice, '[data-form-notice]'].filter(Boolean);
+  const retryNoticeSelectors = [behavior.retryNotice, '[data-form-captcha-retry]'].filter(Boolean);
+  const retrySelectors = [behavior.retry, '[data-captcha-retry]'].filter(Boolean);
+  const submitSelectors = [behavior.submit, '[data-form-submit]'].filter(Boolean);
+
+  const errorEl = () => findNode(form, root, errorSelectors, legacyIds('notify-error'));
+  const ensureErrorEl = () => errorEl() || ensureStatusEl(form, 'error');
+  const successEl = () => findNode(form, root, successSelectors, legacyIds('notify-success'));
+  const noticeEl = () => findNode(form, root, noticeSelectors, legacyIds('notify-local-notice'));
+  const retryNoticeEl = () => findNode(form, root, retryNoticeSelectors, legacyIds('notify-captcha-retry'));
+  const retryBtnEl = () => findNode(form, root, retrySelectors, legacyIds('notify-captcha-retry-btn'));
+
+  const errors = (config.submit && config.submit.errors) || {};
+  const errorCopy = (code, fallback) => (code && errors[code]) || fallback;
+  const responseError = (body) => {
+    if (!body) return GENERIC_ERROR_TEXT;
+    if (body.message || body.error) return String(body.message || body.error);
+    if (body.code) return errorCopy(body.code, String(body.code));
+    return GENERIC_ERROR_TEXT;
+  };
 
   const showError = (message) => {
-    const err = errorEl();
+    const err = ensureErrorEl();
     if (!err) return;
     if (message !== undefined && message !== null && message !== '') err.textContent = String(message);
     else if (message === '') {
@@ -143,23 +238,32 @@ export function bootModal(root, opts = {}) {
     err.classList.remove('d-none');
   };
   const hideError = () => {
-    const err = form.querySelector('[data-form-error]') || findById('notify-error');
+    const err = errorEl();
     if (err) err.classList.add('d-none');
   };
   const hideSuccess = () => {
-    const ok = form.querySelector('[data-form-success]') || findById('notify-success');
+    const ok = successEl();
     if (ok) ok.classList.add('d-none');
+  };
+  const showSuccess = () => {
+    const ok = successEl() || ensureStatusEl(form, 'success');
+    if (ok) ok.classList.remove('d-none');
   };
 
   // Prefill page context (generic) and keep hidden fields in sync.
-  for (const [key, value] of Object.entries(page || {})) {
-    if (value === undefined || value === null) continue;
-    for (const input of qsa(form, `[name="${CSS && CSS.escape ? CSS.escape(key) : key}"]`)) {
-      if (input && (input.value === '' || input.value === undefined || input.value === null)) input.value = String(value);
+  const seedInputs = (overwrite) => {
+    for (const [key, value] of Object.entries(page || {})) {
+      if (value === undefined || value === null) continue;
+      for (const input of qsa(form, `[name="${escapeSelector(key)}"]`)) {
+        if (!input) continue;
+        if (!overwrite && input.value !== '' && input.value !== undefined && input.value !== null) continue;
+        input.value = String(value);
+      }
     }
-  }
+  };
+  seedInputs(false);
 
-  const timestampInput = form.querySelector('[name="timestamp"]');
+  const timestampInput = form.querySelector(`[name="${escapeSelector(behavior.timestamp)}"]`);
   const stamp = () => { if (timestampInput) timestampInput.value = String(now()); };
   stamp();
 
@@ -251,8 +355,7 @@ export function bootModal(root, opts = {}) {
     return false;
   };
 
-  const ensureSuccessEl = () => form.querySelector('[data-form-success]') || findById('notify-success') || ensureStatusEl(form, 'success', 'notify-success');
-  const submitBtn = ensureSubmitButton(form, config);
+  const submitBtn = findNode(form, root, submitSelectors, legacyIds('notify-submit')) || ensureSubmitButton(form, config);
   const defaultSubmitHtml = submitBtn ? submitBtn.innerHTML : '';
   const defaultSubmitText = submitBtn ? submitBtn.textContent : 'Надіслати';
 
@@ -277,16 +380,11 @@ export function bootModal(root, opts = {}) {
     hideSuccess();
     form.classList.remove('was-validated');
     setGroupsVisible(true);
-    const localNotice = findById('notify-local-notice');
-    if (localNotice) localNotice.classList.add('d-none');
-    const retryNotice = findById('notify-captcha-retry');
+    const notice = noticeEl();
+    if (notice) notice.classList.add('d-none');
+    const retryNotice = retryNoticeEl();
     if (retryNotice) retryNotice.classList.add('d-none');
-    for (const [key, value] of Object.entries(page || {})) {
-      if (value === undefined || value === null) continue;
-      for (const input of qsa(form, `[name="${CSS && CSS.escape ? CSS.escape(key) : key}"]`)) {
-        if (input) input.value = String(value);
-      }
-    }
+    seedInputs(true);
     for (const field of captchaFields) syncCaptchaState(field);
     restoreSubmit();
     syncCounters();
@@ -296,17 +394,17 @@ export function bootModal(root, opts = {}) {
     if (!Captcha || !captchaFields.length) return;
     for (const field of captchaFields) {
       const sel = captchaSelector(field);
-      const action = field.action || field.captchaAction || formName;
-      const retryNotice = findById('notify-captcha-retry');
+      const action = captchaAction(field, config, formName);
+      const retryNotice = retryNoticeEl();
       if (Captcha.isLocal && Captcha.isLocal()) {
         controller.setCaptchaSolved(field.name, true);
-        const notice = findById('notify-local-notice');
+        const notice = noticeEl();
         if (notice) notice.classList.remove('d-none');
         continue;
       }
       controller.setCaptchaSolved(field.name, false);
       controller.setCaptchaToken(field.name, '');
-      const notice = findById('notify-local-notice');
+      const notice = noticeEl();
       if (notice) notice.classList.add('d-none');
       if (retryNotice) retryNotice.classList.add('d-none');
       if (typeof window === 'undefined' || typeof window.turnstile === 'undefined') {
@@ -374,7 +472,7 @@ export function bootModal(root, opts = {}) {
   };
   const scheduleEmailDns = (name) => {
     if (dnsTimers[name]) clearTimeout(dnsTimers[name]);
-    dnsTimers[name] = setTimeout(() => { delete dnsTimers[name]; checkEmailDomain(name); }, 500);
+    dnsTimers[name] = later(() => { delete dnsTimers[name]; checkEmailDomain(name); }, 500);
   };
   const lastEmailValue = {};
   controller.subscribe((event, names) => {
@@ -396,17 +494,35 @@ export function bootModal(root, opts = {}) {
     modalEl.addEventListener(eventName, handler);
   };
 
-  const modalSelector = (config.behavior && config.behavior.modal) || '#notifyModal';
-  let modalEl = null;
-  try { modalEl = root.querySelector(modalSelector) || (modalSelector.startsWith('#') ? root.getElementById(modalSelector.slice(1)) : null) || (form.closest ? form.closest('.modal') : null); } catch { modalEl = root.getElementById('notifyModal'); }
+  let modalEl = behavior.modal ? findNode(form, root, [behavior.modal], legacyIds(LEGACY_NAME + 'Modal')) : null;
+  if (!modalEl && form.closest) modalEl = form.closest('.modal');
+  const events = {
+    show: behavior.events.show || 'show.bs.modal',
+    shown: behavior.events.shown || 'shown.bs.modal',
+    hidden: behavior.events.hidden || 'hidden.bs.modal',
+  };
   if (modalEl) {
-    onModalEvent(modalEl, 'show.bs.modal', resetForm);
-    onModalEvent(modalEl, 'shown.bs.modal', mountCaptcha);
-    onModalEvent(modalEl, 'hidden.bs.modal', unmountCaptcha);
+    onModalEvent(modalEl, events.show, () => { if (behavior.reset) resetForm(); });
+    onModalEvent(modalEl, events.shown, mountCaptcha);
+    onModalEvent(modalEl, events.hidden, unmountCaptcha);
   }
 
-  const retryBtn = findById('notify-captcha-retry-btn') || form.querySelector('[data-captcha-retry]');
+  const retryBtn = retryBtnEl();
   if (retryBtn) retryBtn.addEventListener('click', mountCaptcha);
+
+  const showBusy = () => {
+    if (!submitBtn) return;
+    submitBtn.disabled = true;
+    if (submitBtn.tagName !== 'INPUT') {
+      const sending = (config.chrome && config.chrome.sending) || 'Надсилання...';
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>' + sending;
+    }
+  };
+
+  const applySuccessHooks = () => {
+    for (const node of findNodes(root, behavior.success.hide)) node.classList.add('d-none');
+    for (const node of findNodes(root, behavior.success.show)) node.classList.remove('d-none');
+  };
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -417,7 +533,7 @@ export function bootModal(root, opts = {}) {
 
     const valid = controller.validateAll();
     if (isCaptchaBlocked()) {
-      showError(CAPTCHA_REQUIRED_TEXT);
+      showError(errorCopy('E_CAPTCHA_REQUIRED', CAPTCHA_REQUIRED_TEXT));
       form.classList.add('was-validated');
       return;
     }
@@ -431,19 +547,16 @@ export function bootModal(root, opts = {}) {
     const tokens = {};
     for (const field of captchaFields) {
       const sel = captchaSelector(field);
-      const key = captchaTokenKey(field);
+      const key = captchaTokenKey(field, config);
       const tok = Captcha && Captcha.token ? (Captcha.token(sel) || '') : '';
       tokens[key] = tok;
       if (tok) controller.setCaptchaToken(field.name, tok);
     }
-    const primaryToken = captchaFields.length ? (tokens[captchaTokenKey(captchaFields[0])] || '') : '';
+    const primaryToken = captchaFields.length ? (tokens[captchaTokenKey(captchaFields[0], config)] || '') : '';
     const payload = buildJsonPayload(form, controller, primaryToken);
     for (const [k, v] of Object.entries(tokens)) payload[k] = v;
 
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      if (submitBtn.tagName !== 'INPUT') submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>Надсилання...';
-    }
+    showBusy();
 
     fetchImpl(form.getAttribute('action') || endpoint, {
       method: (config.submit && config.submit.method) || 'POST',
@@ -453,21 +566,20 @@ export function bootModal(root, opts = {}) {
       .then((response) => response.json().catch(() => ({})).then((body) => ({ ok: response.ok, body })))
       .then(({ ok, body }) => {
         if (!ok || !body || !body.success) {
-          const code = body && body.code;
           if (controller.setServerErrors && body && body.errors) controller.setServerErrors(body.errors);
-          showError((body && (body.message || body.error)) || (code ? String(code) : 'На жаль, сталася помилка. Спробуйте ще раз пізніше.'));
-          if (Captcha && code && String(code).indexOf('E_CAPTCHA') === 0) {
-            const rn = findById('notify-captcha-retry');
-            if (rn) rn.classList.remove('d-none');
+          showError(responseError(body));
+          if (Captcha && body && String(body.code || '').indexOf('E_CAPTCHA') === 0) {
+            const retryNotice = retryNoticeEl();
+            if (retryNotice) retryNotice.classList.remove('d-none');
           }
           throw new Error('Send failed');
         }
         setGroupsVisible(false);
-        const ln = findById('notify-local-notice');
-        if (ln) ln.classList.add('d-none');
-        const okEl = ensureSuccessEl();
-        if (okEl) okEl.classList.remove('d-none');
+        const notice = noticeEl();
+        if (notice) notice.classList.add('d-none');
+        showSuccess();
         if (submitBtn) submitBtn.classList.add('d-none');
+        applySuccessHooks();
       })
       .catch(() => {
         restoreSubmit();

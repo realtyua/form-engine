@@ -301,11 +301,50 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "hide": { "type": "string" },
-            "show": { "type": "string" }
+            "hide": { "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+            "show": { "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }
           }
         },
-        "reset": { "type": "boolean" }
+        "reset": { "type": "boolean" },
+        "submit": {
+          "description": "CSS selector of the modal submit control; defaults to [data-form-submit].",
+          "type": "string"
+        },
+        "status": {
+          "description": "CSS selectors for the modal error/success status nodes; default to [data-form-error] / [data-form-success].",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "error": { "type": "string" },
+            "success": { "type": "string" }
+          }
+        },
+        "notice": {
+          "description": "CSS selector of the local/notice node; defaults to [data-form-notice].",
+          "type": "string"
+        },
+        "retry": {
+          "description": "CSS selector of the captcha retry trigger; defaults to [data-captcha-retry].",
+          "type": "string"
+        },
+        "retryNotice": {
+          "description": "CSS selector of the notice shown after a captcha error; defaults to [data-form-captcha-retry].",
+          "type": "string"
+        },
+        "events": {
+          "description": "Lifecycle event names on the modal element. Bootstrap 4 names are the default.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "show": { "type": "string" },
+            "shown": { "type": "string" },
+            "hidden": { "type": "string" }
+          }
+        },
+        "timestamp": {
+          "description": "Name of the timestamp field refreshed on reset; defaults to timestamp.",
+          "type": "string"
+        }
       }
     },
 
