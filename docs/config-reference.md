@@ -40,6 +40,7 @@ All keys optional. Any key can be overridden per-field.
 | `pattern` | string | Default regex pattern for text-like fields |
 | `patternMessage` | string | Default message when pattern fails |
 | `submit` | object | Submit endpoint defaults (see `submit` below) |
+| `mapIconPath` | string | Base path for Leaflet marker icons; the map widget can override it with `iconPath` |
 | `feedback` | object | Default validation copy |
 | `validation` | object | Per-key default messages (legacy key, empty in current configs) |
 | `required` | object | Required marker defaults |
@@ -212,7 +213,12 @@ Leaflet map picker.
   type: "widgets"
   widget: "map"
   height: 420                 # Optional. Desktop height (mobile 280px default)
+  iconPath: "/assets/css/images/"  # Optional. Leaflet marker icon base path; overrides settings.mapIconPath
 ```
+
+Leaflet's marker icon path comes from `settings.mapIconPath` or the widget's
+`iconPath`. The runtime never hard-codes an assets directory, so renaming the
+config field or moving the icons needs no glue change.
 
 #### `widgets` — `price_info`
 
@@ -367,6 +373,11 @@ behavior:
     hide: "#my-modal"         # Selector or list of selectors to hide on success
     show: "#success-toast"    # Selector or list of selectors to show on success
 ```
+
+`behavior.mode` is the **only** profile dispatch. `app.js` is the single browser
+entry: it discovers every `*-config` island and starts the shared boot in
+`form-runtime.js`, which selects the page or modal profile. No form name, config
+filename, field name or selector participates in that choice.
 
 Every hook is optional. The DOM data-* contract (`[data-form-error]`,
 `[data-form-success]`, `[data-form-notice]`, `[data-captcha-retry]`,
