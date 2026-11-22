@@ -32,6 +32,13 @@
     "assets": { "$ref": "#/$defs/assets" }
   },
   "$defs": {
+    "actionSelector": {
+      "description": "One CSS selector or a list of selectors that locate an action control.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+      ]
+    },
     "condition": {
       "description": "One visibility/validation rule. `values` is an equality set, `value` is a comparison expression such as '>0', `except` negates.",
       "type": "object",
@@ -311,8 +318,19 @@
         },
         "reset": { "type": "boolean" },
         "submit": {
-          "description": "CSS selector of the modal submit control; defaults to [data-form-submit].",
+          "description": "Legacy single-selector override for the submit action; prefer actions.submit.",
           "type": "string"
+        },
+        "actions": {
+          "description": "Per-form action overrides. Each value is a CSS selector (or list of selectors) for that action. Omitted actions resolve from the neutral data-form-action hooks and the theme's default chrome.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "submit": { "$ref": "#/$defs/actionSelector" },
+            "reset": { "$ref": "#/$defs/actionSelector" },
+            "cancel": { "$ref": "#/$defs/actionSelector" },
+            "retry": { "$ref": "#/$defs/actionSelector" }
+          }
         },
         "status": {
           "description": "CSS selectors for the modal error/success status nodes; default to [data-form-error] / [data-form-success].",
@@ -342,6 +360,7 @@
           "properties": {
             "show": { "type": "string" },
             "shown": { "type": "string" },
+            "hide": { "type": "string" },
             "hidden": { "type": "string" }
           }
         },
@@ -541,7 +560,18 @@
         "errorTitle": { "type": "string" },
         "errorCode": { "type": "string" },
         "retry": { "type": "string" },
-        "close": { "type": "string" }
+        "close": { "type": "string" },
+        "actions": {
+          "description": "Labels for action controls the engine generates. Overrides the legacy per-action keys above.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "submit": { "type": "string" },
+            "reset": { "type": "string" },
+            "cancel": { "type": "string" },
+            "retry": { "type": "string" }
+          }
+        }
       }
     },
 

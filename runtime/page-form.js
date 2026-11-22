@@ -4,7 +4,7 @@
 
 import { autocompleteFilter, autocompleteMatch, buildData, buildLocationIndex, buildLocationShowTypes, collectPhotos, fileNoticeFor, filePlural, findFieldInConfig, formatFileSize, locationAncestorsTail, locationDisplay, locationField, locationFieldNames, locationIsRequired, locationLocked, locationMethod, locationNearest, locationOptions, locationParent, locationPreset, locationReadonly, matchesValues, newFileName, parseFileSize, priceInfoHtml, resolveAutocompleteSource, stepFieldNames } from './data.js';
 import { AP_ERROR_GENERIC, AP_ERROR_TEXTS, buildPayload, toFormData } from './submit.js';
-import { bootForm, captchaAction, captchaSelector as fieldCaptchaSelector, captchaSolved, captchaTokenKey, configFields, findWidgets, queryAll, wireSubmit } from './form-runtime.js';
+import { bootForm, captchaAction, captchaSelector as fieldCaptchaSelector, captchaSolved, captchaTokenKey, configFields, findAction, findWidgets, queryAll, resetFormState, wireActions, wireSubmit } from './form-runtime.js';
 
 // Nav-chip classes used when the island carries no theme tokens (bare mounts,
 // tests). Matches the bootstrap4 theme, the engine default.
@@ -77,7 +77,7 @@ function setupPage(ctx) {
   const nextBtn = el('[data-step-next]');
   const stepActions = el('[data-step-actions]');
   const stepSpacer = el('[data-step-spacer]');
-  const submitBtn = el('[data-submit]');
+  const submitBtn = findAction(root, config, 'submit') || el('[data-submit]');
   const submitLabel = el('[data-submit-label]');
   const submitBusy = el('[data-submit-busy]');
   const submittedBlock = el('[data-submitted-block]');
@@ -180,6 +180,7 @@ function setupPage(ctx) {
 
   const submitHooks = {
     triggers: () => [submitBtn, retryBtn].filter(Boolean),
+    actions: () => [submitBtn].filter(Boolean),
     before: () => {
       photosForSubmit = null;
       showLocalNotice('');
@@ -2291,6 +2292,13 @@ function setupPage(ctx) {
     wakeHiddenWidgets();
   };
   firstWake();
+
+  // Optional reset/cancel actions use the same resolver as the modal profile.
+  // A page has no dialog to close, so cancel only emits a hook event.
+  wireActions(ctx, {
+    reset: () => { resetFormState(ctx); syncChrome(); },
+    cancel: () => { form.dispatchEvent(new Event('form-engine:cancel', { bubbles: true })); },
+  }, root);
 
   wireSubmit(ctx, submitHooks);
 

@@ -358,7 +358,12 @@ behavior:
   seed: "form-data-island"    # JSON island ID for hidden field seeds (modal)
   reset: true                 # Reset form on the modal show event (default: true)
   timestamp: "timestamp"      # Field name refreshed on reset
-  submit: "#my-submit"        # Submit control (default: [data-form-submit])
+  submit: "#my-submit"        # Legacy submit override; prefer actions.submit
+  actions:                    # Action controls (selector or list of selectors)
+    submit: "#my-submit"      # Default: [data-form-action="submit"], [data-form-submit], [data-submit], type=submit
+    reset: "#my-reset"        # Default: [data-form-action="reset"], [data-form-reset], type=reset
+    cancel: "#my-cancel"      # Default: [data-form-action="cancel"], [data-form-cancel], [data-dismiss="modal"]
+    retry: "#my-retry"        # Default: [data-form-action="retry"], [data-submit-retry], [data-captcha-retry]
   status:
     error: "#my-error"        # Default: [data-form-error]
     success: "#my-success"    # Default: [data-form-success]
@@ -368,6 +373,7 @@ behavior:
   events:                     # Lifecycle events on the modal element
     show: "show.bs.modal"
     shown: "shown.bs.modal"
+    hide: "hide.bs.modal"     # Fired by the cancel/close action
     hidden: "hidden.bs.modal"
   success:
     hide: "#my-modal"         # Selector or list of selectors to hide on success
@@ -379,13 +385,19 @@ entry: it discovers every `*-config` island and starts the shared boot in
 `form-runtime.js`, which selects the page or modal profile. No form name, config
 filename, field name or selector participates in that choice.
 
-Every hook is optional. The DOM data-* contract (`[data-form-error]`,
-`[data-form-success]`, `[data-form-notice]`, `[data-captcha-retry]`,
-`[data-form-submit]`) is enough for a new modal config; the selectors above only
-override it. The legacy `notify-*` IDs are a compatibility fallback for the
-existing notify form, not a requirement. Captcha fields stay config-driven:
-`element_id`/`name`, `action` (or `submit.captcha.action`) and `token` (or
-`submit.captcha.token`).
+Every hook is optional. The neutral DOM contract is enough for a new config:
+`[data-form-action="submit|reset|cancel|retry"]` for actions and
+`[data-form-error]`, `[data-form-success]`, `[data-form-notice]` for status. The
+older hooks (`[data-form-submit]`, `[data-submit]`, `[data-submit-retry]`,
+`[data-captcha-retry]`, `button[type="submit"]`) still resolve, and `behavior.actions`
+overrides them per form. A modal without any submit markup gets a generated
+button; page chrome already ships the wizard actions. Both profiles expose the
+same shared action states (`disabled`, `aria-busy`, `data-action-state`,
+`[data-action-label]`, `[data-action-busy]`) for loading/success/error/retry.
+
+The legacy `notify-*` IDs are a compatibility fallback for the existing notify
+form, not a requirement. Captcha fields stay config-driven: `element_id`/`name`,
+`action` (or `submit.captcha.action`) and `token` (or `submit.captcha.token`).
 
 ---
 
@@ -405,6 +417,11 @@ chrome:
   errorCode: "Код помилки"
   retry: "Спробувати ще раз"
   close: "Закрити"
+  actions:                # Labels for controls the engine generates
+    submit: "Надіслати"
+    reset: "Скинути"
+    cancel: "Закрити"
+    retry: "Спробувати ще раз"
 ```
 
 ---

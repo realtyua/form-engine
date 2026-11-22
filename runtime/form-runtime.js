@@ -10,9 +10,42 @@ import { FormRender } from './render.js';
 import { makeController } from './controller.js';
 import { bindForm } from './binder.js';
 import { counterRemaining, findFieldInConfig, stepFieldNames } from './data.js';
+import { escapeHtml } from './html.js';
 
 const CONFIG_SUFFIX = '-config';
 const DEFAULT_THEME = 'bootstrap4';
+
+// One action contract for both profiles. The neutral data-form-action hooks are
+// canonical; the other selectors keep already-baked forms and legacy configs
+// working. `behavior.actions` overrides them per form, so no form name or id is
+// ever needed to find a button.
+const ACTION_SELECTORS = {
+  submit: ['[data-form-action="submit"]', '[data-form-submit]', '[data-submit]', 'button[type="submit"]', 'input[type="submit"]'],
+  reset: ['[data-form-action="reset"]', '[data-form-reset]', 'button[type="reset"]'],
+  cancel: ['[data-form-action="cancel"]', '[data-form-cancel]', '[data-dismiss="modal"]'],
+  retry: ['[data-form-action="retry"]', '[data-submit-retry]', '[data-captcha-retry]'],
+};
+const ACTION_COPY = {
+  submit: 'Надіслати',
+  reset: 'Скинути',
+  cancel: 'Скасувати',
+  retry: 'Спробувати ще раз',
+  sending: 'Надсилання...',
+};
+const ACTION_CLASSES = {
+  bootstrap4: {
+    submit: 'btn btn-success',
+    reset: 'btn btn-outline-secondary',
+    cancel: 'btn btn-outline-secondary',
+    retry: 'btn btn-outline-danger btn-sm',
+  },
+  tailwind: {
+    submit: 'px-3 py-1.5 rounded bg-green-600 text-white',
+    reset: 'px-3 py-1.5 rounded border border-gray-500 text-gray-800',
+    cancel: 'px-3 py-1.5 rounded border border-gray-500 text-gray-800',
+    retry: 'px-2 py-1 rounded border border-red-300 text-red-700 text-sm',
+  },
+};
 
 export function queryAll(node, selector) {
   return node && node.querySelectorAll
@@ -62,6 +95,66 @@ export function findNodes(root, selectors) {
     }
   }
   return out;
+}
+
+/** Copy for an action, from chrome.actions first and legacy chrome keys last. */
+export function actionCopy(config, key) {
+  const chrome = (config && config.chrome) || {};
+  return (chrome.actions && chrome.actions[key]) || chrome[key] || ACTION_COPY[key] || '';
+}
+
+/** Selectors for one action: config override, legacy override, neutral hooks. */
+export function actionSelectors(config, action) {
+  const behavior = (config && config.behavior) || {};
+  const declared = behavior.actions && behavior.actions[action];
+  const legacy = action === 'submit' ? behavior.submit : (action === 'retry' ? behavior.retry : null);
+  return [...selectorList(declared), ...selectorList(legacy), ...(ACTION_SELECTORS[action] || [])];
+}
+
+export function findActions(root, config, action) {
+  const out = [];
+  for (const sel of actionSelectors(config, action)) {
+    for (const node of queryAll(root, sel)) {
+      if (out.indexOf(node) === -1) out.push(node);
+    }
+  }
+  return out;
+}
+
+export function findAction(root, config, action) {
+  return findActions(root, config, action)[0] || null;
+}
+
+/**
+ * Paint one action's shared state. Both generated and baked buttons carry the
+ * same label/busy hooks, so loading, success and error need no profile-specific
+ * markup. Buttons without hooks keep their own text through a saved default.
+ */
+export function setActionState(node, state, config) {
+  if (!node) return;
+  const busy = state === 'busy';
+  if ('disabled' in node) node.disabled = busy;
+  node.setAttribute('aria-busy', busy ? 'true' : 'false');
+  node.setAttribute('data-action-state', state);
+  const label = node.querySelector('[data-action-label], [data-submit-label]');
+  const spinner = node.querySelector('[data-action-busy], [data-submit-busy]');
+  if (label) label.hidden = busy;
+  if (spinner) spinner.hidden = !busy;
+  if (label || spinner) return;
+  const isInput = node.tagName === 'INPUT';
+  if (busy) {
+    if (!node.hasAttribute('data-action-default-label')) {
+      node.setAttribute('data-action-default-label', isInput ? (node.value || '') : (node.textContent || ''));
+    }
+    const sending = actionCopy(config, 'sending');
+    if (isInput) node.value = sending;
+    else node.textContent = sending;
+  } else if (node.hasAttribute('data-action-default-label')) {
+    const saved = node.getAttribute('data-action-default-label');
+    if (isInput) node.value = saved;
+    else node.textContent = saved;
+    node.removeAttribute('data-action-default-label');
+  }
 }
 
 /** Fields of every step, independent of how the steps nest their rows. */
@@ -115,20 +208,29 @@ export function ensureStatusEl(form, kind) {
   return div;
 }
 
-export function ensureSubmitButton(form, config) {
-  let btn = form.querySelector('button[type="submit"], input[type="submit"]');
-  if (btn) return btn;
+export function ensureSubmitButton(form, config, themeName) {
+  const existing = findAction(form, config, 'submit') ||
+    form.querySelector('button[type="submit"], input[type="submit"]');
+  if (existing) return existing;
   const doc = form.ownerDocument || (typeof document !== 'undefined' ? document : null);
   if (!doc || !doc.createElement) return null;
-  btn = doc.createElement('button');
-  btn.type = 'submit';
-  btn.className = 'btn btn-primary mt-2';
+  const theme = themeName || (config && config.theme) || DEFAULT_THEME;
+  const classes = ACTION_CLASSES[theme] || ACTION_CLASSES[DEFAULT_THEME];
+  const btn = doc.createElement('button');
+  btn.type = 'button';
+  btn.className = classes.submit;
+  btn.setAttribute('data-form-action', 'submit');
+  // Keep the older hook as an alias: existing selectors and integrations keep
+  // finding the generated button, while the neutral hook is the new contract.
   btn.setAttribute('data-form-submit', '');
-  const label = (config.settings && (config.settings.submitLabel || config.settings.submit)) ||
-    (config.chrome && (config.chrome.submit || config.chrome.submitLabel)) ||
-    (config.submit && (config.submit.label || config.submit.text)) ||
-    'Надіслати';
-  btn.textContent = label;
+  const label = (config && config.submit && (config.submit.label || config.submit.text)) ||
+    actionCopy(config, 'submit');
+  const sending = actionCopy(config, 'sending');
+  const spinner = theme === 'tailwind'
+    ? '<span class="inline-block w-4 h-4 rounded-full animate-spin ml-2 align-middle" role="status" aria-hidden="true" style="border:2px solid rgba(255,255,255,.4);border-top-color:#fff"></span>'
+    : '<span class="spinner-border spinner-border-sm ml-2" role="status" aria-hidden="true"></span>';
+  btn.innerHTML = `<span data-action-label>${escapeHtml(label)}</span>` +
+    `<span data-action-busy hidden>${escapeHtml(sending)}${spinner}</span>`;
   form.appendChild(btn);
   return btn;
 }
@@ -183,6 +285,7 @@ export function createContext(root, opts = {}) {
     controller,
     binder,
     data: controller.getData(),
+    initialData: { ...controller.getData() },
     theme,
     endpoint,
     state: { submitted: false, submitting: false, submittingError: false },
@@ -284,9 +387,47 @@ export function wireAsync(ctx) {
   return { syncCounters, checkEmailDomain };
 }
 
+/** Reset the controller to its boot state; profiles handle their own chrome. */
+export function resetFormState(ctx) {
+  const { controller, config, initialData } = ctx;
+  if (!controller || !controller.setData) return;
+  if (controller.setServerErrors) controller.setServerErrors({});
+  for (const field of configFields(config)) {
+    if (!field || !field.name) continue;
+    if (controller.clearGlueError) controller.clearGlueError(field.name);
+    const value = initialData && Object.prototype.hasOwnProperty.call(initialData, field.name)
+      ? initialData[field.name]
+      : '';
+    controller.setData(field.name, value);
+  }
+  if (controller.setStep) controller.setStep(0);
+}
+
+/** Wire non-submit actions declared by the config or exposed by neutral hooks. */
+export function wireActions(ctx, handlers = {}, scope) {
+  const root = scope || ctx.root;
+  const attached = {};
+  for (const [action, handler] of Object.entries(handlers)) {
+    attached[action] = [];
+    for (const node of findActions(root, ctx.config, action)) {
+      node.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        handler(ctx, node);
+      });
+      attached[action].push(node);
+    }
+  }
+  return attached;
+}
+
 /** One submit pipeline; profiles only describe their guards and presentation. */
 export function runSubmit(ctx, hooks = {}) {
   const { controller, state, fetchImpl } = ctx;
+  const actionNodes = (hooks.actions ? hooks.actions(ctx) : []) || [];
+  const paint = (actionState) => {
+    for (const node of actionNodes) setActionState(node, actionState, ctx.config);
+  };
   const submit = () => {
     if (state.submitting) return;
     if (hooks.before && hooks.before(ctx) === false) return;
@@ -297,20 +438,29 @@ export function runSubmit(ctx, hooks = {}) {
     if (hooks.guards && hooks.guards(ctx) === false) return;
 
     state.submitting = true;
+    paint('busy');
     if (hooks.busy) hooks.busy(ctx);
     const tokens = hooks.tokens ? (hooks.tokens(ctx) || {}) : {};
     const request = hooks.request ? hooks.request(ctx, tokens) : null;
     if (!request || !request.url) {
       state.submitting = false;
+      paint('idle');
       if (hooks.finish) hooks.finish(ctx);
       return;
     }
     fetchImpl(request.url, request.init || {})
       .then((r) => r.json().catch(() => ({})).then((body) => ({ ok: r.ok, body })))
-      .then(({ ok, body }) => { if (hooks.response) hooks.response(ctx, ok, body); })
-      .catch(() => { if (hooks.error) hooks.error(ctx); })
+      .then(({ ok, body }) => {
+        if (hooks.response) hooks.response(ctx, ok, body);
+        paint(ok && body && body.success ? 'success' : 'error');
+      })
+      .catch(() => {
+        if (hooks.error) hooks.error(ctx);
+        paint('error');
+      })
       .finally(() => {
         state.submitting = false;
+        paint('idle');
         if (hooks.finish) hooks.finish(ctx);
       });
   };
@@ -325,7 +475,13 @@ export function wireSubmit(ctx, hooks = {}) {
     submit();
   });
   for (const node of (hooks.triggers ? hooks.triggers(ctx) : []) || []) {
-    if (node && node.addEventListener) node.addEventListener('click', submit);
+    if (!node || !node.addEventListener) continue;
+    // A type=submit trigger would otherwise fire the native submit as well and
+    // run the pipeline twice. Preventing it keeps all entry points identical.
+    node.addEventListener('click', (event) => {
+      event.preventDefault();
+      submit();
+    });
   }
   return submit;
 }
