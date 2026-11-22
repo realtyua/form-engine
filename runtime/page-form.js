@@ -1,15 +1,10 @@
-// Browser boot for page forms (the add-property wizard style).
-//
-// One entry for every page form: discover the <name>-config island, mount the
-// rendered form, wire the controller/binder, the widget runtimes and the
-// submit flow. Dispatched from app.js, the single loader entry - there are no
-// per-form files.
+// Page profile of the shared form boot: wizard chrome and the widget glue.
+// Discovery, mount, controller/binder, async checks and the submit pipeline are
+// owned by form-runtime.js; this file adds only the page-specific behaviour.
 
-import { FormRender } from './render.js';
-import { makeController } from './controller.js';
-import { bindForm } from './binder.js';
 import { autocompleteFilter, autocompleteMatch, buildData, buildLocationIndex, buildLocationShowTypes, collectPhotos, fileNoticeFor, filePlural, findFieldInConfig, formatFileSize, locationAncestorsTail, locationDisplay, locationField, locationFieldNames, locationIsRequired, locationLocked, locationMethod, locationNearest, locationOptions, locationParent, locationPreset, locationReadonly, matchesValues, newFileName, parseFileSize, priceInfoHtml, resolveAutocompleteSource, stepFieldNames } from './data.js';
 import { AP_ERROR_GENERIC, AP_ERROR_TEXTS, buildPayload, toFormData } from './submit.js';
+import { bootForm, captchaAction, captchaSelector as fieldCaptchaSelector, captchaSolved, captchaTokenKey, configFields, findWidgets, queryAll, wireSubmit } from './form-runtime.js';
 
 // Nav-chip classes used when the island carries no theme tokens (bare mounts,
 // tests). Matches the bootstrap4 theme, the engine default.
@@ -40,74 +35,39 @@ function highlightDropdownItem(dropdown, index, input) {
 
 // ------------------------------------------------------------ browser boot ----
 
-/**
- * Boots one FormEngine v2 form on the page. Discovery is generic: it finds the
- * `#<name>-config` JSON island (or `opts.name`) and mounts into `#<name>-app`,
- * so the same glue drives every form the engine renders, not just add-property.
- * Returns null when the page has no matching config island (safety: the module
- * may load on a page where the form was removed).
- *
- * @param {Document} root
- * @param {object} [opts]
- *   {string}   [opts.name]        form id; default: first `*-config` island
- *   {object}   [opts.Captcha]     default window.CaptchaSite
- *   {function} [opts.fetch]       default global fetch
- *   {function} [opts.setTimeout]  default setTimeout
- *   {function} [opts.setInterval] default setInterval
- *   {function} [opts.leaflet]     default window.L
- */
+// ------------------------------------------------------------ page profile ----
+
+
+
+export const pageProfile = {
+  mode: 'page',
+  submitMethod: () => 'POST',
+  controllerOpts: (config) => ({ data: buildData(config) }),
+  setup: (ctx) => setupPage(ctx),
+};
+
 export function bootPage(root, opts = {}) {
-  let name = opts.name || '';
-  let configNode = name ? root.getElementById(`${name}-config`) : null;
-  if (!configNode) {
-    configNode = root.querySelector('script[type="application/json"][id$="-config"]');
-  }
-  if (!configNode) return null;
-  name = configNode.id.slice(0, -'-config'.length);
+  return bootForm(root, { ...opts, mode: 'page', profile: pageProfile });
+}
 
-  const app = root.getElementById(`${name}-app`);
-  if (!app) return null;
-
-  let config;
-  try {
-    config = JSON.parse(configNode.textContent);
-  } catch (e) {
-    return null;
-  }
-
-  const endpoint = app.getAttribute('data-endpoint') || (config.submit && config.submit.action) || '';
-  config.submit = { ...(config.submit || {}), method: 'POST' };
-  if (endpoint) config.submit.action = endpoint;
-
-  const form = FormRender.mount(app, config, { theme: config.theme });
-  const controller = makeController(config, { data: buildData(config) });
+function setupPage(ctx) {
+  const {
+    root, name, config, form, controller, data, state, theme,
+    endpoint, Captcha, fetchImpl, later, every, L,
+  } = ctx;
 
   // Chrome (nav buttons, blocks, indicator) lives in the form's page wrapper so
   // several forms can share a document without stepping on each other's nodes.
   // The fallback keeps bare mounts (tests, legacy pages) working.
   const scope = root.getElementById(`${name}-page`) || root;
-  const qsa = (sel, s) => Array.prototype.slice.call((s || scope).querySelectorAll(sel));
+  const qsa = (sel, s) => queryAll(s || scope, sel);
   const el = (sel) => scope.querySelector(sel);
 
   // File inputs must not participate in the binder's data-field walk: they take
-  // part in submit() via <input type=file> FormData appending (legacy behavior).
+  // part in submit via <input type=file> FormData appending (legacy behavior).
   qsa('input[type="file"][data-field]', form).forEach((input) => input.removeAttribute('data-field'));
 
-  const theme = FormRender.theme(config.theme || 'bootstrap4');
-  const binder = bindForm(form, controller, { classes: theme.validationClasses, colClass: theme.colClass });
-
-  const Captcha = opts.Captcha !== undefined
-    ? opts.Captcha
-    : (typeof window !== 'undefined' ? window.CaptchaSite || null : null);
-  const fetchImpl = opts.fetch || ((...args) => globalThis.fetch(...args));
-  const later = opts.setTimeout || ((fn, ms) => setTimeout(fn, ms));
-  const every = opts.setInterval || ((fn, ms) => setInterval(fn, ms));
-  const L = opts.leaflet !== undefined
-    ? opts.leaflet
-    : (typeof window !== 'undefined' ? window.L || null : null);
-
   const totalSteps = controller.totalSteps();
-  const data = controller.getData();
   const rates = config.rates || { usd: 43.5, eur: 51.5, nbu: 43.2413 };
 
   // ------------------------------------------------------ wizard chrome ------
@@ -130,8 +90,6 @@ export function bootPage(root, opts = {}) {
   const errorMap = { ...AP_ERROR_TEXTS, ...((config.submit && config.submit.errors) || {}) };
   const stepIndicator = el('[data-step-indicator]');
   const titleWrap = stepTitles.length ? stepTitles[0].parentElement : null;
-
-  let state = { submitted: false, submitting: false, submittingError: false };
 
   const syncChrome = () => {
     const step = controller.step() + 1;
@@ -204,84 +162,8 @@ export function bootPage(root, opts = {}) {
     }
   };
 
-  //
-  // The old Alpine block validated the location widget in submit() but the new
-  // engine keeps the rules in the controller; here only the glue parts - the
-  // widget cascade and the photos - are gate-checked by hand (form-engine.js:
-  // 688,710 rebuilt the errors map and would wipe a widget finding otherwise).
-  const submit = () => {
-    if (state.submitting) return;
-    showLocalNotice('');
-    state.submittingError = false;
-    if (errorBlock) errorBlock.hidden = true;
-    if (!controller.validateAll()) {
-      syncChrome();
-      focusFirstInvalid();
-      return;
-    }
-    const locNames = locationFieldNames(locationWidget());
-    for (const fn of locNames) {
-      if (locationIsRequired(locationWidget(), fn, evalDependsLocal) && !locData()[fn]) {
-        controller.setGlueError(`${locRoot()}.${fn}`, locationFieldMessage(fn));
-      } else {
-        controller.clearGlueError(`${locRoot()}.${fn}`);
-      }
-    }
-    for (const fn of locNames) {
-      if (locationIsRequired(locationWidget(), fn, evalDependsLocal) && !locData()[fn]) return;
-    }
-    for (const field of captchaWidgets()) {
-      if (Captcha && Captcha.enabled && !controllerSolved(field)) {
-        controller.validateField(field.name);
-        const boxSel = captchaSelector(field.name);
-        const box = root.querySelector(boxSel);
-        if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-    }
-    const photos = collectPhotos((files['images'] || []), (processed['images'] || []));
-    if (photos.error) {
-      controller.setGlueError('images', photos.error);
-      showLocalNotice(photos.error);
-      return;
-    }
-    controller.clearGlueError('images');
-    state.submitting = true;
-    syncChrome();
-    const tokens = {};
-    for (const field of captchaWidgets()) {
-      const selector = captchaSelector(field.name);
-      tokens[field.token || 'cf-turnstile-response'] = Captcha ? Captcha.token(selector) : '';
-    }
-    const payload = buildPayload(data, tokens, photos);
-    fetchImpl(endpoint, { method: 'POST', body: toFormData(payload) })
-      .then((r) => r.json().then((res) => ({ ok: r.ok, body: res })))
-      .then((res) => {
-        if (res.body && res.body.success) {
-          state.submitted = true;
-          state.submittingError = false;
-        } else if (res.body && res.body.errors) {
-          controller.setServerErrors(res.body.errors);
-        } else {
-          showSubmitError(res.body && res.body.code);
-        }
-        syncChrome();
-        // Focus management after submit
-        if (state.submitted && submittedBlock) {
-          later(() => submittedBlock.focus(), 0);
-        } else if (state.submittingError && errorBlock) {
-          later(() => errorBlock.focus(), 0);
-        }
-      })
-      .catch(() => {
-        showSubmitError('');
-        syncChrome();
-      })
-      .finally(() => {
-        state.submitting = false;
-        syncChrome();
-      });
-  };
+  // Submit: the shared runtime owns validate -> guards -> tokens -> request ->
+  // status. The page profile only checks its widget findings and paints chrome.
 
   const focusFirstInvalid = () => {
     later(() => {
@@ -294,7 +176,93 @@ export function bootPage(root, opts = {}) {
   };
 
   const retryBtn = el('[data-submit-retry]');
-  if (retryBtn) retryBtn.addEventListener('click', submit);
+  let photosForSubmit = null;
+
+  const submitHooks = {
+    triggers: () => [submitBtn, retryBtn].filter(Boolean),
+    before: () => {
+      photosForSubmit = null;
+      showLocalNotice('');
+      state.submittingError = false;
+      if (errorBlock) errorBlock.hidden = true;
+    },
+    invalid: () => {
+      syncChrome();
+      focusFirstInvalid();
+    },
+    // The old Alpine block validated the location widget in submit() but the
+    // new engine keeps the rules in the controller; only the glue parts - the
+    // widget cascade and the photos - are gate-checked by hand.
+    guards: () => {
+      const locNames = locationFieldNames(locationWidget());
+      for (const fn of locNames) {
+        if (locationIsRequired(locationWidget(), fn, evalDependsLocal) && !locData()[fn]) {
+          controller.setGlueError(`${locRoot()}.${fn}`, locationFieldMessage(fn));
+        } else {
+          controller.clearGlueError(`${locRoot()}.${fn}`);
+        }
+      }
+      for (const fn of locNames) {
+        if (locationIsRequired(locationWidget(), fn, evalDependsLocal) && !locData()[fn]) return false;
+      }
+      for (const field of captchaWidgets()) {
+        if (Captcha && Captcha.enabled && !controllerSolved(field)) {
+          controller.validateField(field.name);
+          const box = root.querySelector(fieldCaptchaSelector(field));
+          if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return false;
+        }
+      }
+      const allFiles = [];
+      const allProcessed = [];
+      for (const name of Object.keys(files)) {
+        allFiles.push(...(files[name] || []));
+        allProcessed.push(...(processed[name] || []));
+      }
+      photosForSubmit = collectPhotos(allFiles, allProcessed);
+      const fileFieldName = fileField() && fileField().name;
+      if (photosForSubmit.error) {
+        if (fileFieldName) controller.setGlueError(fileFieldName, photosForSubmit.error);
+        showLocalNotice(photosForSubmit.error);
+        return false;
+      }
+      if (fileFieldName) controller.clearGlueError(fileFieldName);
+      return true;
+    },
+    busy: () => syncChrome(),
+    tokens: () => {
+      const tokens = {};
+      for (const field of captchaWidgets()) {
+        tokens[field.token || captchaTokenKey(field, config)] = captchaTokenOf(field);
+      }
+      return tokens;
+    },
+    request: (c, tokens) => ({
+      url: endpoint,
+      init: { method: 'POST', body: toFormData(buildPayload(data, tokens, photosForSubmit)) },
+    }),
+    response: (c, ok, res) => {
+      if (res && res.success) {
+        state.submitted = true;
+        state.submittingError = false;
+      } else if (res && res.errors) {
+        controller.setServerErrors(res.errors);
+      } else {
+        showSubmitError(res && res.code);
+      }
+      syncChrome();
+      if (state.submitted && submittedBlock) later(() => submittedBlock.focus(), 0);
+      else if (state.submittingError && errorBlock) later(() => errorBlock.focus(), 0);
+    },
+    error: () => {
+      showSubmitError('');
+      syncChrome();
+    },
+    finish: () => {
+      state.submitting = false;
+      syncChrome();
+    },
+  };
 
   const focusStepTitle = (stepNum) => {
     const title = el(`[data-step-title="${stepNum}"]`);
@@ -317,7 +285,6 @@ export function bootPage(root, opts = {}) {
       focusFirstInvalid();
     }
   });
-  if (submitBtn) submitBtn.addEventListener('click', submit);
 
   const scrollToIndicator = () => {
     if (stepIndicator && stepIndicator.scrollIntoView) stepIndicator.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -336,7 +303,7 @@ export function bootPage(root, opts = {}) {
 
   const locationWidget = () => widgetByName('location');
   const mapField = () => widgetByName('map');
-  const locRoot = () => (locationWidget() && locationWidget().name) || 'location_widget';
+  const locRoot = () => (locationWidget() && locationWidget().name) || '';
   const locData = () => {
     if (!data[locRoot()]) data[locRoot()] = {};
     return data[locRoot()];
@@ -431,8 +398,7 @@ export function bootPage(root, opts = {}) {
   };
 
   // Legacy locationFillAncestors (method "two"): choosing the leaf fills every
-  // ancestor from the option so the middle fields become visible and locked
-  // (mirrors _includes/add-property.html locationFillAncestors).
+  // ancestor from the option so the middle fields become visible and locked.
   const locationFillAncestors = (entry) => {
     for (const a of entry._ancestors || []) {
       locData()[a.field] = a.id;
@@ -685,7 +651,7 @@ export function bootPage(root, opts = {}) {
     return "Це поле обов'язкове";
   };
 
-  // Legacy validateLocationField (add-property.html:1587): a blur touches the
+  // Legacy validateLocationField: a blur touches the
   // sub-field and shows the required message with the full precedence order.
   const validateLocationSubfield = (fieldName) => {
     const val = locData()[fieldName];
@@ -781,7 +747,7 @@ export function bootPage(root, opts = {}) {
     }
     const parts = [];
     const names = locationIndex(locationWidget());
-    // Legacy locationSummary (add-property.html:2009): leaf as "type name",
+    // Legacy locationSummary: leaf as "type name",
     // the penultimate row cleaned to "... територіальна громада", and the
     // country pinned at the end.
     for (let i = 0; i < names.length; i++) {
@@ -994,7 +960,8 @@ export function bootPage(root, opts = {}) {
   const fileStamp = {};
   const fileFeedbackDefault = new WeakMap();
 
-  const fileField = () => findFieldInConfig(config, 'images') || widgetByName('file_handle');
+  const fileField = () => configFields(config).find((field) =>
+    field && (field.type === 'file' || (field.type === 'widgets' && /^file/.test(field.widget || '')))) || null;
   const fileCfg = () => (fileField() && fileField().file) || {};
 
   qsa('input[type="file"]', form).forEach((input) => {
@@ -1708,34 +1675,18 @@ export function bootPage(root, opts = {}) {
     node.innerHTML = priceInfoHtml(data, config, rates);
   };
 
-  // ---- captcha widgets
-  const captchaWidgets = () => {
-    const list = [];
-    for (const step of config.steps || []) {
-      for (const field of stepFieldNames(step)) {
-        if (field.type === 'widgets' && field.widget === 'captcha') list.push(field);
-      }
-    }
-    return list;
-  };
+  // ---- captcha widgets (pure selectors/actions come from the shared boot)
+  const captchaWidgets = () => findWidgets(config, 'captcha');
 
-  const captchaSelector = (name) => {
-    const field = findFieldInConfig(config, name);
-    return '#' + ((field && (field.element_id || field.name)) || name) + '-widget';
-  };
+  const captchaSelector = (name) =>
+    fieldCaptchaSelector(findFieldInConfig(config, name) || { name });
 
-  const captchaActionOf = (field) => field.action || 'add_property';
+  const captchaActionOf = (field) => captchaAction(field, config, name);
 
-  const controllerSolved = (field) => {
-    const selector = captchaSelector(field.name);
-    if (!root.querySelector(selector)) return true;
-    return Boolean(Captcha && Captcha.solved && Captcha.solved(selector));
-  };
+  const controllerSolved = (field) => captchaSolved(root, Captcha, field);
 
-  const captchaTokenOf = (field) => {
-    const selector = captchaSelector(field.name);
-    return Captcha && Captcha.token ? (Captcha.token(selector) || '') : '';
-  };
+  const captchaTokenOf = (field) =>
+    Captcha && Captcha.token ? (Captcha.token(captchaSelector(field.name)) || '') : '';
 
   const sealedCaptchaWatch = {};
 
@@ -1902,7 +1853,8 @@ export function bootPage(root, opts = {}) {
   };
 
   const doInitMap = (container) => {
-    L.Icon.Default.imagePath = '/assets/css/images/';
+    const iconPath = mc.iconPath || (config.settings && config.settings.mapIconPath);
+    if (iconPath) L.Icon.Default.imagePath = iconPath;
     if (mapReady) {
       if (mapInstance) later(() => mapInstance.invalidateSize(true), 0);
       syncMapInfo();
@@ -1958,7 +1910,7 @@ export function bootPage(root, opts = {}) {
   /** The name the map widget's DOM uses for its info hooks. */
   const mapWidgetName = () => {
     const mc = mapField() || {};
-    return mc.name || 'map_widget';
+    return mc.name || '';
   };
 
   /**
@@ -2233,7 +2185,7 @@ export function bootPage(root, opts = {}) {
   // `offsetParent === null` guard parks a never-firing MutationObserver and the
   // map / captcha never wake up. The step change flips the `hidden` attribute on
   // an ancestor, not on the widget container, so nothing re-triggers them - this
-  // wake tracks the offsetParent transition itself on every controller notify.
+  // wake tracks the offsetParent transition itself on every controller event.
   let mapVisibilitySeen = false;
   const captchaMountSeen = {};
 
@@ -2274,19 +2226,6 @@ export function bootPage(root, opts = {}) {
     wakeCaptcha();
   };
 
-  // Legacy textarea.html renders "N символів залишилось" under a maxlength
-  // textarea; the theme bakes the initial count and this keeps it live.
-  const syncCharCounters = () => {
-    for (const node of qsa('[data-char-counter]', form)) {
-      const name = node.getAttribute('data-char-counter');
-      const max = parseInt(node.getAttribute('data-maxlength'), 10) || 0;
-      const val = controller.getValue(name);
-      const len = (val === null || val === undefined) ? 0 : String(val).length;
-      const span = node.querySelector('span');
-      if (span) span.textContent = String(Math.max(0, max - len));
-    }
-  };
-
   let lastSettlementName = '';
 
   const getSettlementFieldName = () => {
@@ -2300,7 +2239,8 @@ export function bootPage(root, opts = {}) {
     // Only react when settlement-related fields changed
     const related = names && Array.isArray(names) ? names.filter((n) => {
       if (typeof n !== 'string') return false;
-      return n === `location_widget.${sfn}` || n === `location_widget.${sfn}Name` || n === sfn;
+      const root = locRoot();
+      return n === `${root}.${sfn}` || n === `${root}.${sfn}Name` || n === sfn;
     }) : [];
     if (!related.length && !names) return;
     const cur = locData()[`${sfn}Name`] || '';
@@ -2314,56 +2254,9 @@ export function bootPage(root, opts = {}) {
     }
   };
 
-  const dnsTimers = {};
-  const emailFieldNames = (() => {
-    const out = [];
-    for (const step of config.steps || []) {
-      for (const field of stepFieldNames(step)) {
-        if (field.type === 'email') out.push(field.name);
-      }
-    }
-    return out;
-  })();
-
-  const checkEmailDomain = (name) => {
-    const field = findFieldInConfig(config, name);
-    if (!field || !(field.validation && field.validation.dnscheck && field.validation.dnscheck.value)) return;
-    const val = controller.getValue(name);
-    if (!val || String(val).indexOf('@') <= 0) { controller.clearGlueError(name); return; }
-    const domain = String(val).split('@')[1];
-    if (!domain) { controller.clearGlueError(name); return; }
-    const msg = (field.validation.dnscheck.message) || 'Домен не приймає пошту або не існує';
-    const opts = { headers: { Accept: 'application/dns-json' } };
-    const base = 'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(domain) + '&type=';
-    Promise.all([
-      fetchImpl(base + 'MX', opts),
-      fetchImpl(base + 'A', opts),
-      fetchImpl(base + 'AAAA', opts),
-    ]).then((responses) => Promise.all(responses.map((r) => r.json())))
-      .then((results) => {
-        if (String(controller.getValue(name)) !== String(val)) return;
-        const has = (r) => Boolean(r && r.Answer && r.Answer.length > 0);
-        if (!has(results[0]) && !has(results[1]) && !has(results[2])) controller.setGlueError(name, msg);
-        else controller.clearGlueError(name);
-      })
-      .catch(() => {});
-  };
-
-  const scheduleEmailDns = (name) => {
-    if (dnsTimers[name]) clearTimeout(dnsTimers[name]);
-    dnsTimers[name] = setTimeout(() => { delete dnsTimers[name]; checkEmailDomain(name); }, 500);
-  };
-
-  const lastEmailValue = {};
-  controller.subscribe((event, names) => {
+  const subscribe = (profileCtx, event, names) => {
+    void profileCtx;
     if (names && Array.isArray(names)) {
-      for (const n of names) {
-        if (emailFieldNames.indexOf(n) === -1) continue;
-        const v = String(controller.getValue(n) || '');
-        if (lastEmailValue[n] === v) continue;
-        lastEmailValue[n] = v;
-        scheduleEmailDns(n);
-      }
       // A file field has no `data-field`, so the binder does not touch its
       // feedback blocks - a step validation (next/submit) is the moment the
       // rule message of the file field has to appear.
@@ -2374,18 +2267,16 @@ export function bootPage(root, opts = {}) {
     }
     syncChrome();
     syncPriceInfo();
-    syncCharCounters();
     // location + autocomplete live states settle after the cascade
     if (locationWidget()) syncAllLocation();
     autocompleteReResolveLocation(names);
     syncAcSearchFor(event === 'setServerErrors' ? null : names);
     followSettlementChange(names);
     later(wakeHiddenWidgets, 0);
-  });
+  };
 
   syncChrome();
   syncPriceInfo();
-  syncCharCounters();
   for (const name of Object.keys(files)) syncFilesUI(name);
   syncAllLocation();
   {
@@ -2401,21 +2292,22 @@ export function bootPage(root, opts = {}) {
   };
   firstWake();
 
+  wireSubmit(ctx, submitHooks);
+
   return {
-    controller,
-    form,
-    data,
-    state,
-    refetchAddress: () => {
-      if (!locationWidget()) return;
-      const addressPath = locationWidget().data || '/assets/data/address.json';
-      return fetchImpl(addressPath).then((r) => r.json()).then((json) => {
-        addressIndex = buildLocationIndex(json || [], locationWidget());
-        Object.assign(shoType, buildLocationShowTypes(addressIndex, locationWidget()));
-        applyLocationPresets();
-        syncAllLocation();
-        syncSummary();
-      });
+    subscribe,
+    extras: {
+      refetchAddress: () => {
+        if (!locationWidget()) return;
+        const addressPath = locationWidget().data || '/assets/data/address.json';
+        return fetchImpl(addressPath).then((r) => r.json()).then((json) => {
+          addressIndex = buildLocationIndex(json || [], locationWidget());
+          Object.assign(shoType, buildLocationShowTypes(addressIndex, locationWidget()));
+          applyLocationPresets();
+          syncAllLocation();
+          syncSummary();
+        });
+      },
     },
   };
 }
