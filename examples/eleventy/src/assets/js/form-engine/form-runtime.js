@@ -185,6 +185,13 @@ export function captchaAction(field, config, name) {
   return (field && (field.action || field.captchaAction)) || configured || name;
 }
 
+/** One enabled check for both profiles (a function or a plain property). */
+export function captchaEnabled(Captcha) {
+  return Boolean(Captcha && (
+    typeof Captcha.enabled === 'function' ? Captcha.enabled() : Captcha.enabled
+  ));
+}
+
 export function captchaSolved(root, Captcha, field) {
   const selector = captchaSelector(field);
   if (root.querySelector && !root.querySelector(selector)) return true;
@@ -309,22 +316,23 @@ export function createContext(root, opts = {}) {
  */
 export function wireAsync(ctx) {
   const { config, controller, form, later } = ctx;
-  const dnsTimers = {};
+  const dnsSchedules = new Map();
+  const dnsJobs = new Set();
   const emailNames = configFields(config)
     .filter((field) => field && field.type === 'email')
     .map((field) => field.name);
 
   const checkEmailDomain = (name) => {
     const field = findFieldInConfig(config, name);
-    if (!field || !(field.validation && field.validation.dnscheck && field.validation.dnscheck.value)) return;
+    if (!field || !(field.validation && field.validation.dnscheck && field.validation.dnscheck.value)) return Promise.resolve();
     const val = controller.getValue(name);
-    if (!val || String(val).indexOf('@') <= 0) { controller.clearGlueError(name); return; }
+    if (!val || String(val).indexOf('@') <= 0) { controller.clearGlueError(name); return Promise.resolve(); }
     const domain = String(val).split('@')[1];
-    if (!domain) { controller.clearGlueError(name); return; }
+    if (!domain) { controller.clearGlueError(name); return Promise.resolve(); }
     const msg = (field.validation.dnscheck && field.validation.dnscheck.message) || 'Домен не приймає пошту або не існує';
     const opts = { headers: { Accept: 'application/dns-json' } };
     const base = 'https://cloudflare-dns.com/dns-query?name=' + encodeURIComponent(domain) + '&type=';
-    Promise.all([
+    const job = Promise.all([
       ctx.fetchImpl(base + 'MX', opts),
       ctx.fetchImpl(base + 'A', opts),
       ctx.fetchImpl(base + 'AAAA', opts),
@@ -336,11 +344,55 @@ export function wireAsync(ctx) {
         else controller.clearGlueError(name);
       })
       .catch(() => {});
+    dnsJobs.add(job);
+    const forget = () => dnsJobs.delete(job);
+    job.then(forget, forget);
+    return job;
   };
 
   const scheduleEmailDns = (name) => {
-    if (dnsTimers[name]) clearTimeout(dnsTimers[name]);
-    dnsTimers[name] = later(() => { delete dnsTimers[name]; checkEmailDomain(name); }, 500);
+    const previous = dnsSchedules.get(name);
+    if (previous) previous.cancel();
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      dnsSchedules.delete(name);
+      checkEmailDomain(name);
+    };
+    const timer = later(run, 500);
+    dnsSchedules.set(name, {
+      run,
+      cancel: () => {
+        cancelled = true;
+        if (timer !== undefined && timer !== null) clearTimeout(timer);
+      },
+    });
+  };
+
+  // Submit has to see the verdict of a check that is still on its debounce
+  // timer. Flushing runs the stored callbacks even when the host supplied a
+  // fake scheduler, so page and modal share one deterministic path.
+  const flushDns = () => {
+    for (const [name, entry] of [...dnsSchedules]) {
+      dnsSchedules.delete(name);
+      // Run before cancelling: `cancel()` marks the entry as superseded, which
+      // would make a flushed callback look stale.
+      entry.run();
+      entry.cancel();
+    }
+  };
+
+  const hasPending = () => dnsJobs.size > 0 || dnsSchedules.size > 0;
+
+  const waitForAsync = async () => {
+    // A DNS reply can change data and schedule another check; give that a few
+    // rounds rather than hanging forever on a pathological config.
+    for (let round = 0; round < 8 && hasPending(); round += 1) {
+      flushDns();
+      const jobs = [...dnsJobs];
+      if (!jobs.length) break;
+      await Promise.all(jobs);
+    }
   };
 
   const syncCounters = () => {
@@ -384,7 +436,7 @@ export function wireAsync(ctx) {
   });
   syncCounters();
 
-  return { syncCounters, checkEmailDomain };
+  return { syncCounters, checkEmailDomain, flushDns, hasPending, waitForAsync };
 }
 
 /** Reset the controller to its boot state; profiles handle their own chrome. */
@@ -429,40 +481,67 @@ export function runSubmit(ctx, hooks = {}) {
     for (const node of actionNodes) setActionState(node, actionState, ctx.config);
   };
   const submit = () => {
-    if (state.submitting) return;
+    if (state.submitting || state.waitingAsync) return;
     if (hooks.before && hooks.before(ctx) === false) return;
-    if (!controller.validateAll()) {
-      if (hooks.invalid) hooks.invalid(ctx);
-      return;
-    }
-    if (hooks.guards && hooks.guards(ctx) === false) return;
 
-    state.submitting = true;
-    paint('busy');
-    if (hooks.busy) hooks.busy(ctx);
-    const tokens = hooks.tokens ? (hooks.tokens(ctx) || {}) : {};
-    const request = hooks.request ? hooks.request(ctx, tokens) : null;
-    if (!request || !request.url) {
-      state.submitting = false;
+    const stopWait = () => {
+      state.waitingAsync = false;
       paint('idle');
       if (hooks.finish) hooks.finish(ctx);
-      return;
-    }
-    fetchImpl(request.url, request.init || {})
-      .then((r) => r.json().catch(() => ({})).then((body) => ({ ok: r.ok, body })))
-      .then(({ ok, body }) => {
-        if (hooks.response) hooks.response(ctx, ok, body);
-        paint(ok && body && body.success ? 'success' : 'error');
-      })
-      .catch(() => {
-        if (hooks.error) hooks.error(ctx);
-        paint('error');
-      })
-      .finally(() => {
+    };
+
+    const proceed = () => {
+      state.waitingAsync = false;
+      if (!controller.validateAll()) {
+        stopWait();
+        if (hooks.invalid) hooks.invalid(ctx);
+        return;
+      }
+      if (hooks.guards && hooks.guards(ctx) === false) {
+        stopWait();
+        return;
+      }
+
+      state.submitting = true;
+      paint('busy');
+      if (hooks.busy) hooks.busy(ctx);
+      const tokens = hooks.tokens ? (hooks.tokens(ctx) || {}) : {};
+      const request = hooks.request ? hooks.request(ctx, tokens) : null;
+      if (!request || !request.url) {
         state.submitting = false;
         paint('idle');
         if (hooks.finish) hooks.finish(ctx);
-      });
+        return;
+      }
+      fetchImpl(request.url, request.init || {})
+        .then((r) => r.json().catch(() => ({})).then((body) => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+          if (hooks.response) hooks.response(ctx, ok, body);
+          paint(ok && body && body.success ? 'success' : 'error');
+        })
+        .catch(() => {
+          if (hooks.error) hooks.error(ctx);
+          paint('error');
+        })
+        .finally(() => {
+          state.submitting = false;
+          paint('idle');
+          if (hooks.finish) hooks.finish(ctx);
+        });
+    };
+
+    // A DNS check may still be debounced. Wait for it before the synchronous
+    // validation pass; with no pending check this whole path stays synchronous
+    // (the existing busy-state contract relies on that).
+    const shared = ctx.shared;
+    if (!shared || !shared.hasPending || !shared.hasPending()) {
+      proceed();
+      return;
+    }
+    state.waitingAsync = true;
+    paint('busy');
+    if (hooks.busy) hooks.busy(ctx);
+    Promise.resolve(shared.waitForAsync()).then(proceed, proceed);
   };
   return submit;
 }

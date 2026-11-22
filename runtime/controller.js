@@ -179,13 +179,13 @@ export function makeController(config, opts = {}) {
     }
   };
 
-  const recompute = (name) => {
+  // A validation pass must not erase a page-layer finding: the DNS verdict is
+  // still true after `validateAll()` recomputes the synchronous rules. Only a
+  // real edit (setData) clears it, via `clearGlue: true` below.
+  const recompute = (name, { clearGlue = false } = {}) => {
     const field = byName.get(name);
     if (!field) return '';
-    // A page-layer finding no longer applies once the rules speak: editing the
-    // field clears the DNS/glue error first (legacy: errors map rebuilt on
-    // validateField).
-    glueErrors.delete(name);
+    if (clearGlue) glueErrors.delete(name);
     const message = fieldError(field, makeCtx());
     if (message) clientErrors.set(name, message);
     else clientErrors.delete(name);
@@ -208,6 +208,8 @@ fieldError: (name) => glueErrors.get(name) ?? serverErrors.get(name) ?? clientEr
      * (assets/js/form-engine.js:723) - {@link visibleError} still hides the red
      * until the field is engaged. */
     rawFieldError: (name) => {
+      const glue = glueErrors.get(name);
+      if (glue) return glue;
       const field = byName.get(name);
       return field ? fieldError(field, makeCtx()) : '';
     },
@@ -245,8 +247,8 @@ fieldError: (name) => glueErrors.get(name) ?? serverErrors.get(name) ?? clientEr
 
       const changed = new Set([name]);
       for (const dep of dependents.get(name) || []) changed.add(dep);
-      for (const other of changed) if (other !== name) recompute(other);
-      recompute(name);
+      for (const other of changed) if (other !== name) recompute(other, { clearGlue: true });
+      recompute(name, { clearGlue: true });
 
       notify('setData', [...changed]);
       return { fields: [...changed] };
@@ -302,7 +304,8 @@ fieldError: (name) => glueErrors.get(name) ?? serverErrors.get(name) ?? clientEr
       for (const field of stepFields(model, index)) {
         names.push(field.name);
         engaged.add(field.name);
-        if (recompute(field.name)) valid = false;
+        const clientMessage = recompute(field.name);
+        if (glueErrors.get(field.name) || clientMessage) valid = false;
       }
       notify('validateStep', names);
       return valid;
@@ -316,8 +319,8 @@ fieldError: (name) => glueErrors.get(name) ?? serverErrors.get(name) ?? clientEr
         let hasError = false;
         for (const field of stepFields(model, i)) {
           engaged.add(field.name);
-          const message = recompute(field.name);
-          if (message) {
+          const clientMessage = recompute(field.name);
+          if (glueErrors.get(field.name) || clientMessage) {
             valid = false;
             hasError = true;
           }

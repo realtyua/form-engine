@@ -4,7 +4,8 @@
 
 import { autocompleteFilter, autocompleteMatch, buildData, buildLocationIndex, buildLocationShowTypes, collectPhotos, fileNoticeFor, filePlural, findFieldInConfig, formatFileSize, locationAncestorsTail, locationDisplay, locationField, locationFieldNames, locationIsRequired, locationLocked, locationMethod, locationNearest, locationOptions, locationParent, locationPreset, locationReadonly, matchesValues, newFileName, parseFileSize, priceInfoHtml, resolveAutocompleteSource, stepFieldNames } from './data.js';
 import { AP_ERROR_GENERIC, AP_ERROR_TEXTS, buildPayload, toFormData } from './submit.js';
-import { bootForm, captchaAction, captchaSelector as fieldCaptchaSelector, captchaSolved, captchaTokenKey, configFields, findAction, findWidgets, queryAll, resetFormState, wireActions, wireSubmit } from './form-runtime.js';
+import { bootForm, captchaAction, captchaEnabled, captchaSelector as fieldCaptchaSelector, captchaSolved, captchaTokenKey, configFields, findAction, findWidgets, queryAll, resetFormState, wireActions, wireSubmit } from './form-runtime.js';
+import { patternMessage } from './validation.js';
 
 // Nav-chip classes used when the island carries no theme tokens (bare mounts,
 // tests). Matches the bootstrap4 theme, the engine default.
@@ -207,7 +208,7 @@ function setupPage(ctx) {
         if (locationIsRequired(locationWidget(), fn, evalDependsLocal) && !locData()[fn]) return false;
       }
       for (const field of captchaWidgets()) {
-        if (Captcha && Captcha.enabled && !controllerSolved(field)) {
+        if (captchaEnabled(Captcha) && !controllerSolved(field)) {
           controller.validateField(field.name);
           const box = root.querySelector(fieldCaptchaSelector(field));
           if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -384,7 +385,7 @@ function setupPage(ctx) {
     if (!pattern || !searchText) { patternErrors[fieldName] = ''; return; }
     try {
       if (!new RegExp(pattern).test(searchText)) {
-        patternErrors[fieldName] = (field && field.validation && field.validation.pattern) || (field && field.feedback && field.feedback.pattern) || (config.settings && config.settings.feedback && config.settings.feedback.pattern) || 'Неправильний формат';
+        patternErrors[fieldName] = patternMessage(field || {}, { config, data });
       } else {
         patternErrors[fieldName] = '';
       }
@@ -1381,7 +1382,7 @@ function setupPage(ctx) {
     if (pattern && q) {
       try {
         if (!new RegExp(pattern).test(q)) {
-          const pmsg = (field.validation && field.validation.pattern) || (config.settings && config.settings.feedback && config.settings.feedback.pattern) || 'Неправильний формат';
+          const pmsg = patternMessage(field, { config, data });
           st.patternError = pmsg;
           st.results = [];
           st.highlightIndex = -1;

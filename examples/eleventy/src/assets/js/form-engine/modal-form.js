@@ -8,7 +8,7 @@
 import { CAPTCHA_REQUIRED_TEXT } from './data.js';
 import { buildJsonPayload } from './submit.js';
 import {
-  bootForm, captchaAction, captchaSelector, captchaSolved, captchaTokenKey,
+  bootForm, captchaAction, captchaEnabled, captchaSelector, captchaSolved, captchaTokenKey,
   ensureStatusEl, ensureSubmitButton, escapeSelector, findAction, findNode,
   findNodes, findWidgets, queryAll, resetFormState, setActionState, wireActions,
   wireSubmit,
@@ -142,9 +142,7 @@ function setupModal(ctx) {
   const captchaFields = findWidgets(config, 'captcha');
   const captchaWatchTimers = {};
 
-  const captchaEnabled = () => Boolean(Captcha && (
-    typeof Captcha.enabled === 'function' ? Captcha.enabled() : Captcha.enabled
-  ));
+  const enabled = () => captchaEnabled(Captcha);
   const captchaLocal = () => Boolean(Captcha && (
     typeof Captcha.isLocal === 'function' ? Captcha.isLocal() : Captcha.isLocal
   ));
@@ -152,7 +150,7 @@ function setupModal(ctx) {
   const controllerSolved = (field) => captchaSolved(form, Captcha, field);
 
   const syncCaptchaState = (field) => {
-    if (!Captcha || captchaLocal() || !captchaEnabled()) {
+    if (!Captcha || captchaLocal() || !enabled()) {
       controller.setCaptchaSolved(field.name, true);
       return;
     }
@@ -192,7 +190,7 @@ function setupModal(ctx) {
   for (const field of captchaFields) syncCaptchaState(field);
 
   const isCaptchaBlocked = () => {
-    if (!captchaEnabled()) return false;
+    if (!enabled()) return false;
     return captchaFields.some((field) => !controllerSolved(field));
   };
 
