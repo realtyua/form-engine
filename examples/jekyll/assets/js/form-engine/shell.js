@@ -162,10 +162,12 @@ export function renderPage(config, opts = {}) {
 
   const island = {
     theme: themeName,
+    behavior: config.behavior || {},
     settings: config.settings || {},
     steps: config.steps || [],
     rates,
-    chrome: { nav: theme.navTokens },
+    // The browser needs the same action contract the builder used for chrome.
+    chrome: { ...copy, nav: theme.navTokens },
   };
 
   const formHtml = FormRender.render(config, {
@@ -212,7 +214,7 @@ export function renderPage(config, opts = {}) {
  */
 export function renderModal(config, opts = {}) {
   const ctx = resolveContext(config, opts);
-  const { name, themeName, theme, version, scriptUrl, endpoint, rates } = ctx;
+  const { name, themeName, theme, version, scriptUrl, endpoint, rates, copy } = ctx;
 
   const island = {
     id: config.id || name,
@@ -222,7 +224,7 @@ export function renderModal(config, opts = {}) {
     settings: config.settings || {},
     steps: config.steps || [],
     rates,
-    chrome: { nav: theme.navTokens },
+    chrome: { ...copy, nav: theme.navTokens },
   };
 
   const parts = [islandScript(name, island)];

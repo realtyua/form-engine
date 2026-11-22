@@ -9,8 +9,9 @@ import { CAPTCHA_REQUIRED_TEXT } from './data.js';
 import { buildJsonPayload } from './submit.js';
 import {
   bootForm, captchaAction, captchaSelector, captchaSolved, captchaTokenKey,
-  ensureStatusEl, ensureSubmitButton, escapeSelector, findNode, findNodes,
-  findWidgets, queryAll, wireSubmit,
+  ensureStatusEl, ensureSubmitButton, escapeSelector, findAction, findNode,
+  findNodes, findWidgets, queryAll, resetFormState, setActionState, wireActions,
+  wireSubmit,
 } from './form-runtime.js';
 
 const GENERIC_ERROR_TEXT = 'На жаль, сталася помилка. Спробуйте ще раз пізніше.';
@@ -245,15 +246,15 @@ function setupModal(ctx) {
 
   // ------------------------------------------------------- modal lifecycle ----
 
-  const submitBtn = findModalNode(submitSelectors, fallback('submit')) || ensureSubmitButton(form, config);
-  const defaultSubmitHtml = submitBtn ? submitBtn.innerHTML : '';
-  const defaultSubmitText = submitBtn ? submitBtn.textContent : 'Надіслати';
+  // The neutral hook wins, then the config's legacy selector, then a generated
+  // button. A valid modal config can therefore submit without any baked id.
+  const submitBtn = findAction(root, config, 'submit') ||
+    findModalNode(submitSelectors, fallback('submit')) ||
+    ensureSubmitButton(form, config, config.theme);
 
   const restoreSubmit = () => {
     if (!submitBtn) return;
-    submitBtn.disabled = false;
-    if (submitBtn.tagName === 'INPUT') submitBtn.value = defaultSubmitText;
-    else submitBtn.innerHTML = defaultSubmitHtml || defaultSubmitText;
+    setActionState(submitBtn, 'idle', config);
     submitBtn.classList.remove('d-none');
   };
 
@@ -265,6 +266,7 @@ function setupModal(ctx) {
   };
 
   const resetForm = () => {
+    resetFormState(ctx);
     stamp();
     hideError();
     hideSuccess();
@@ -307,14 +309,24 @@ function setupModal(ctx) {
   const retryBtn = retryBtnEl();
   if (retryBtn) retryBtn.addEventListener('click', mountCaptcha);
 
-  const showBusy = () => {
-    if (!submitBtn) return;
-    submitBtn.disabled = true;
-    if (submitBtn.tagName !== 'INPUT') {
-      const sending = (config.chrome && config.chrome.sending) || 'Надсилання...';
-      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>' + sending;
-    }
-  };
+  // Reset/cancel are opt-in actions: they exist when the config declares a
+  // selector or the markup carries the neutral hook. The submit action is
+  // always present (generated when necessary) and is wired by wireSubmit.
+  wireActions(ctx, {
+    reset: () => { if (behavior.reset) resetForm(); },
+    cancel: () => {
+      if (!modalEl) return;
+      const hideEvent = behavior.events.hide || 'hide.bs.modal';
+      if (jq && typeof jq === 'function') {
+        const wrapped = jq(modalEl);
+        if (wrapped && typeof wrapped.modal === 'function') {
+          wrapped.modal('hide');
+          return;
+        }
+      }
+      modalEl.dispatchEvent(new Event(hideEvent, { bubbles: true }));
+    },
+  }, modalEl || root);
 
   const applySuccessHooks = () => {
     for (const node of findNodes(root, behavior.success.hide)) node.classList.add('d-none');
@@ -326,7 +338,8 @@ function setupModal(ctx) {
   let failed = false;
 
   wireSubmit(ctx, {
-    triggers: () => [],
+    triggers: () => [submitBtn].filter(Boolean),
+    actions: () => [submitBtn].filter(Boolean),
     before: () => {
       failed = false;
       for (const field of captchaFields) syncCaptchaState(field);
@@ -339,7 +352,6 @@ function setupModal(ctx) {
       return true;
     },
     invalid: () => { form.classList.add('was-validated'); },
-    busy: () => showBusy(),
     tokens: (c) => {
       const tokens = {};
       for (const field of captchaFields) {
