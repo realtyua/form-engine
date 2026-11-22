@@ -212,6 +212,10 @@
         "pattern": { "type": "string" },
         "patternMessage": { "type": "string" },
         "submit": { "$ref": "#/$defs/submit" },
+        "mapIconPath": {
+          "description": "Base path for Leaflet marker icons (L.Icon.Default.imagePath). Overridable per map widget via its iconPath; the runtime never hard-codes an assets path.",
+          "type": "string"
+        },
         "feedback": {
           "type": "object",
           "additionalProperties": false,
@@ -284,7 +288,7 @@
     },
 
     "behavior": {
-      "description": "How the runtime presents the form. `mode: page` runs the wizard chrome (the default); `mode: modal` runs the modal life-cycle (captcha on shown, reset on show, JSON payload).",
+      "description": "How the runtime presents the form. `mode` is the only dispatch: `page` runs the wizard chrome (the default), `modal` runs the modal life-cycle (captcha on shown, reset on show, JSON payload). The form id, config filename and field names never select a profile.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -478,6 +482,10 @@
         "widget": {
           "description": "For type `widgets`: which component to mount.",
           "enum": ["captcha", "location", "map", "price_info"]
+        },
+        "iconPath": {
+          "description": "For `widget: map`: base path for Leaflet marker icons; falls back to settings.mapIconPath. No assets path is baked into the runtime.",
+          "type": "string"
         },
         "fields": {
           "description": "Sub-fields of a composite widget such as the location cascade.",

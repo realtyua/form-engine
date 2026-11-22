@@ -83,6 +83,61 @@ function turnstileBlock(turnstile, captchaUrl, version) {
     `<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"></script>`;
 }
 
+function resolveContext(config, opts = {}) {
+  if (!config || typeof config !== 'object') {
+    throw new Error('render needs a parsed config object');
+  }
+  const name = opts.name || config.id;
+  if (!name) throw new Error('render needs opts.name or a config id');
+
+  const themeName = config.theme || opts.theme || 'bootstrap4';
+  const theme = FormRender.theme(themeName);
+  const flags = widgetFlags(config);
+  const assets = config.assets || {};
+
+  const base = assets.base ?? opts.base ?? '';
+  const url = (path) => `${base}${path}`;
+  const version = opts.version ? `?v=${encodeURIComponent(opts.version)}` : '';
+  const scriptUrl = url(assets.script || '/assets/js/form-engine/app.js');
+  const captchaUrl = url(assets.captchaScript || '/assets/js/form-engine/captcha.js');
+
+  const endpoint = opts.endpoint || (config.submit && config.submit.action) || '';
+  const copy = { ...DEFAULT_COPY, ...(opts.copy || {}), ...(config.chrome || {}) };
+  const turnstile = config.captcha || opts.turnstile || null;
+  const rates = config.rates || opts.rates || {};
+
+  return {
+    name,
+    themeName,
+    theme,
+    flags,
+    assets,
+    base,
+    url,
+    version,
+    scriptUrl,
+    captchaUrl,
+    endpoint,
+    copy,
+    turnstile,
+    rates,
+  };
+}
+
+/**
+ * Shared gate for captcha assets: emits TURNSTILE_CONFIG, captcha.js and
+ * Turnstile api.js once when the config uses a captcha widget and Turnstile is
+ * enabled. Used by both page and modal fragments.
+ */
+export function renderAssets(config, opts = {}) {
+  const ctx = resolveContext(config, opts);
+  const { flags, turnstile, captchaUrl, version } = ctx;
+  if (turnstile && turnstile.enabled && flags.captcha) {
+    return turnstileBlock(turnstile, captchaUrl, version);
+  }
+  return '';
+}
+
 /**
  * Renders one form page fragment.
  *
@@ -102,27 +157,8 @@ function turnstileBlock(turnstile, captchaUrl, version) {
  * @returns {string}
  */
 export function renderPage(config, opts = {}) {
-  if (!config || typeof config !== 'object') {
-    throw new Error('renderPage() needs a parsed config object');
-  }
-  const name = opts.name || config.id;
-  if (!name) throw new Error('renderPage() needs opts.name or a config id');
-
-  const themeName = config.theme || opts.theme || 'bootstrap4';
-  const theme = FormRender.theme(themeName);
-  const flags = widgetFlags(config);
-  const assets = config.assets || {};
-
-  const base = assets.base ?? opts.base ?? '';
-  const url = (path) => `${base}${path}`;
-  const version = opts.version ? `?v=${encodeURIComponent(opts.version)}` : '';
-  const scriptUrl = url(assets.script || '/assets/js/form-engine/app.js');
-  const captchaUrl = url(assets.captchaScript || '/assets/js/form-engine/captcha.js');
-
-  const endpoint = opts.endpoint || (config.submit && config.submit.action) || '';
-  const copy = { ...DEFAULT_COPY, ...(opts.copy || {}), ...(config.chrome || {}) };
-  const turnstile = config.captcha || opts.turnstile || null;
-  const rates = config.rates || opts.rates || {};
+  const ctx = resolveContext(config, opts);
+  const { name, themeName, theme, flags, version, scriptUrl, endpoint, copy, turnstile, captchaUrl, rates } = ctx;
 
   const island = {
     theme: themeName,
@@ -141,9 +177,10 @@ export function renderPage(config, opts = {}) {
 
   const parts = [islandScript(name, island)];
 
-  if (turnstile && turnstile.enabled && flags.captcha) {
-    parts.push(turnstileBlock(turnstile, captchaUrl, version));
-  }
+  const captcha = turnstile && turnstile.enabled && flags.captcha
+    ? turnstileBlock(turnstile, captchaUrl, version)
+    : '';
+  if (captcha) parts.push(captcha);
   if (flags.map && opts.mapCss) parts.push(`<style>${opts.mapCss}</style>`);
   const style = themeStyle(themeName);
   if (style) parts.push(`<style>${style}</style>`);
@@ -165,6 +202,36 @@ export function renderPage(config, opts = {}) {
   if (flags.map && opts.mapJs) parts.push(`<script>${opts.mapJs}</script>`);
   parts.push(`<script type="module" src="${attr(scriptUrl)}${version}"></script>`);
 
+  return parts.join('\n');
+}
+
+/**
+ * Renders a modal form fragment: config island + captcha assets (once, when
+ * applicable) + theme style + empty mount point + module loader. No wizard
+ * chrome and no pre-rendered form markup (the modal runtime mounts the form).
+ */
+export function renderModal(config, opts = {}) {
+  const ctx = resolveContext(config, opts);
+  const { name, themeName, theme, version, scriptUrl, endpoint, rates } = ctx;
+
+  const island = {
+    id: config.id || name,
+    version: config.version,
+    behavior: config.behavior,
+    theme: themeName,
+    settings: config.settings || {},
+    steps: config.steps || [],
+    rates,
+    chrome: { nav: theme.navTokens },
+  };
+
+  const parts = [islandScript(name, island)];
+  const captcha = renderAssets(config, opts);
+  if (captcha) parts.push(captcha);
+  const style = themeStyle(themeName);
+  if (style) parts.push(`<style>${style}</style>`);
+  parts.push(`<div id="${attr(name)}-app" data-endpoint="${attr(endpoint)}"></div>`);
+  parts.push(`<script type="module" src="${attr(scriptUrl)}${version}"></script>`);
   return parts.join('\n');
 }
 
