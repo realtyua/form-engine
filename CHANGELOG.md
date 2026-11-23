@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-11-23
+
+### Added
+
+- `runtime/page-form.js`: shared page-form glue for widgets (`location`, `autocomplete`, `map`, `price_info`, `captcha`, file handling, wizard navigation) reused by modal profile.
+- `runtime/modal-form.js`: modal lifecycle, status, captcha gate; reuses widget glue with `{ wireSubmit: false, wireActions: false, captcha: false }`.
+- `runtime/form-runtime.js`: unified boot dispatcher by `behavior.mode` (`page` | `modal`).
+- `runtime/submit.js`: `buildJsonPayload()` for modal profile; `buildPayload`/`toFormData` for page profile.
+- Schema: `submit.encoding` (`multipart` | `json`) with documented defaults (page→multipart, modal→json; file widget forces multipart).
+- Docs: `config-reference.md`, `migration-guide.md` updated for encoding precedence and page/modal parity.
+
+### Changed
+
+- Map picker id derived from widget `element_id`/`name` + `-picker` (no production literals).
+- Example runtimes and Jekyll/Eleventy adapters synced to package runtime (MOD-16 follow-up).
+
 ## [1.0.8] - 2026-11-20
 
 ### Fixed
