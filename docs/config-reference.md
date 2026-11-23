@@ -340,12 +340,18 @@ submit:
     sitekey: "0x4AAAAAAA"
   success: "/thank-you"       # Redirect on success
   error: "/error"             # Redirect on error
-  encoding: "json"            # json | multipart (auto when files present)
+  encoding: "json"            # json | multipart (see precedence below)
   response: "success"         # success | errors (how to read worker reply)
   errors:                     # Worker code → user message map
     "1001": "Це оголошення вже існує"
     "1002": "Перевірте телефон"
 ```
+
+`submit.encoding` selects the request body for both profiles. An explicit
+`json` or `multipart` value wins; without it, any `file` field or `file*` widget
+forces `multipart`, and otherwise the historical profile default applies
+(`multipart` for `page`, `json` for `modal`). Choose the format in the config
+when the same form must keep one payload contract in both modes.
 
 ---
 
@@ -394,6 +400,15 @@ overrides them per form. A modal without any submit markup gets a generated
 button; page chrome already ships the wizard actions. Both profiles expose the
 same shared action states (`disabled`, `aria-busy`, `data-action-state`,
 `[data-action-label]`, `[data-action-busy]`) for loading/success/error/retry.
+
+Widget capabilities are profile-independent as well. `location`,
+`autocomplete`, `map`, `price_info`, file inputs and wizard navigation are
+mounted from the config by the shared widget glue in both modes; the profile
+only owns its lifecycle, status presentation and captcha mounting. Widget ids,
+data paths and selectors are derived from the config or neutral `data-*`
+hooks, so the same config can be moved between `page` and `modal` without a
+runtime change. A map widget's picker id, for example, is derived from its
+`element_id`/`name` plus `-picker`.
 
 The legacy `notify-*` IDs are a compatibility fallback for the existing notify
 form, not a requirement. Captcha fields stay config-driven: `element_id`/`name`,

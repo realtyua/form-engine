@@ -630,6 +630,7 @@ function widgetCaptcha(field, ctx) {
 }
 
 function widgetMap(field, ctx) {
+  const pickerId = `${attr(field.element_id || field.name || 'map')}-picker`;
   const marker = `<div class="map-marker-info" hidden>
     <div class="map-marker-info-icon">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0a5 5 0 0 0-5 5c0 4.14 4.21 9.34 4.66 9.89a.44.44 0 0 0 .68 0C8.79 14.34 13 9.14 13 5a5 5 0 0 0-5-5zm0 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
@@ -643,8 +644,8 @@ function widgetMap(field, ctx) {
   </div>`;
 
   const picker = field.height
-    ? `<div id="map-picker" style="height: ${attr(field.height)}px;" class="relative w-full rounded-md border border-gray-300" role="application" aria-labelledby="label_${attr(field.name)}"></div>`
-    : `<div id="map-picker" class="map-picker-responsive relative w-full rounded-md border border-gray-300" role="application" aria-labelledby="label_${attr(field.name)}"></div>`;
+    ? `<div id="${pickerId}" style="height: ${attr(field.height)}px;" class="relative w-full rounded-md border border-gray-300" role="application" aria-labelledby="label_${attr(field.name)}"></div>`
+    : `<div id="${pickerId}" class="map-picker-responsive relative w-full rounded-md border border-gray-300" role="application" aria-labelledby="label_${attr(field.name)}"></div>`;
 
   const label = `<div class="mb-2" id="label_${attr(field.name)}">${labelBody(field.label, ctx)}${requiredMarker(field, ctx)}</div>`;
 

@@ -11,6 +11,7 @@ import { makeController } from './controller.js';
 import { bindForm } from './binder.js';
 import { counterRemaining, findFieldInConfig, stepFieldNames } from './data.js';
 import { escapeHtml } from './html.js';
+import { buildJsonPayload, buildPayload, toFormData } from './submit.js';
 
 const CONFIG_SUFFIX = '-config';
 const DEFAULT_THEME = 'bootstrap4';
@@ -168,6 +169,46 @@ export function configFields(config) {
 
 export function findWidgets(config, widget) {
   return configFields(config).filter((field) => field && field.type === 'widgets' && field.widget === widget);
+}
+
+/** Any file widget makes multipart mandatory, independent of the profile. */
+export function hasFileFields(config) {
+  return configFields(config).some((field) => field && (
+    field.type === 'file' || (field.type === 'widgets' && /^file/.test(field.widget || ''))
+  ));
+}
+
+/**
+ * Payload format is a config decision: `submit.encoding` wins, files force
+ * multipart, otherwise the profile keeps its historical default (page posts a
+ * form-data body, modal posts flat JSON). No form or profile name is inspected.
+ */
+export function payloadEncoding(config, profile) {
+  const declared = config && config.submit && config.submit.encoding;
+  if (declared === 'json' || declared === 'multipart') return declared;
+  if (hasFileFields(config)) return 'multipart';
+  if (profile && (profile.payloadEncoding === 'json' || profile.payloadEncoding === 'multipart')) {
+    return profile.payloadEncoding;
+  }
+  return profile && profile.mode === 'modal' ? 'json' : 'multipart';
+}
+
+/** One request body for every profile; the widget glue only supplies files. */
+export function buildRequestInit(ctx, tokens, photos) {
+  const { config, data, form, controller, profile } = ctx;
+  const method = (config.submit && config.submit.method) || 'POST';
+  if (payloadEncoding(config, profile) === 'multipart') {
+    return { method, body: toFormData(buildPayload(data, tokens, photos)) };
+  }
+  const primary = findWidgets(config, 'captcha')[0];
+  const primaryToken = primary ? ((tokens || {})[captchaTokenKey(primary, config)] || '') : '';
+  const payload = buildJsonPayload(form, controller, primaryToken);
+  for (const [key, value] of Object.entries(tokens || {})) payload[key] = value;
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  };
 }
 
 export function captchaSelector(field) {
