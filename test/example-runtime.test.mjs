@@ -17,7 +17,7 @@ const EXAMPLES = [
   { name: 'eleventy', runtime: join(ROOT, 'examples', 'eleventy', 'src', 'assets', 'js', 'form-engine') },
 ];
 const FORBIDDEN = ['notify', 'add-property', 'add_property', 'images', 'location_widget', 'map_widget'];
-const GLUE = ['app.js', 'form-runtime.js', 'page-form.js', 'modal-form.js'];
+const GLUE = ['app.js', 'form-runtime.js', 'page-form.js', 'modal-form.js', 'widget-glue.js'];
 const flush = () => new Promise((resolveFlush) => setTimeout(resolveFlush, 0));
 
 const boots = Object.fromEntries(await Promise.all(EXAMPLES.map(async (example) => {

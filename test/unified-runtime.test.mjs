@@ -112,6 +112,7 @@ test('the shared boot glue carries no production form, file or field literals', 
     'runtime/form-runtime.js',
     'runtime/page-form.js',
     'runtime/modal-form.js',
+    'runtime/widget-glue.js',
     'runtime/app.js',
   ];
   const forbidden = ['notify', 'add-property', 'add_property', 'images', 'location_widget', 'map_widget'];

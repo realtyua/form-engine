@@ -245,8 +245,13 @@ export function structureChecks(config, html) {
   check(/data-captcha-retry="captcha">Спробувати ще раз/.test(html), 'captcha retry button');
   check(/<span data-error="captcha"><\/span>/.test(html), 'captcha error hook');
 
+  // The picker id follows the map widget's own name (or its explicit
+  // element_id), so two forms can share a document and renaming a field does
+  // not break the gate.
+  const mapWidget = plain.find((field) => field.type === 'widgets' && field.widget === 'map') || {};
+  const mapPickerId = `${mapWidget.element_id || mapWidget.name || 'map'}-picker`;
   check(/<div class="mb-2" id="label_map_widget">/.test(html), 'map label block');
-  check(/<div id="map-picker" class="border rounded map-picker-responsive" role="application" aria-labelledby="label_map_widget"><\/div>/.test(html), 'map picker');
+  check(html.includes(`<div id="${mapPickerId}" class="border rounded map-picker-responsive" role="application" aria-labelledby="label_map_widget"></div>`), 'map picker');
   check(/\.map-picker-responsive \{ height: 280px; \}/.test(html), 'map partial CSS');
   check(/data-map-coords="map_widget"/.test(html), 'map coords hook');
 
@@ -308,7 +313,7 @@ export function structureChecks(config, html) {
       check(engineIds.has(`field_${field.name}`), `control id field_${field.name}`);
     }
   }
-  check(engineIds.has('map-picker') && engineIds.has('captcha-widget'), 'widget fixed ids in render');
+  check(engineIds.has(mapPickerId) && engineIds.has('captcha-widget'), 'widget ids in render');
 
   return checks;
 }

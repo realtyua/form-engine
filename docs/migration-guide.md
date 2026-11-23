@@ -660,6 +660,41 @@ when a modal element is available.
 
 ---
 
+## Widgets and Payload Encoding (page and modal)
+
+The same config can now boot in either profile without losing widget
+behaviour. Shared glue mounts `location`, `autocomplete`, `map`, `price_info`,
+file inputs and step navigation from `steps[].rows[].fields[]` in both
+`behavior.mode: page` and `behavior.mode: modal`. The modal still owns its
+show/reset/hide lifecycle, status blocks and captcha mounting, but widget
+state, file collection and the request body come from the same runtime path.
+Ids and selectors come from config (`element_id`/`name`, `behavior.*`) or
+neutral `data-*` hooks; no production form or field name is baked into the
+glue. For example, a map widget with `name: main_map` gets the picker id
+`main_map-picker`.
+
+Set `submit.encoding` to keep one payload contract in both modes:
+
+```yaml
+submit:
+  action: "/api/my-form"
+  encoding: json       # or multipart
+```
+
+Precedence:
+
+1. An explicit `submit.encoding` (`json` or `multipart`) wins.
+2. A `file` field or `file*` widget forces `multipart`.
+3. Otherwise the compatibility defaults apply: `multipart` for page forms,
+   flat JSON for modal forms.
+
+`multipart` sends `FormData` with the collected files; `json` sends the flat
+payload with `Content-Type: application/json`. Adding a file field to a
+config that previously posted JSON changes the body to multipart unless the
+config explicitly asks for JSON.
+
+---
+
 ## Rollback Plan
 
 If something breaks:

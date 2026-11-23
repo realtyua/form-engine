@@ -7,6 +7,7 @@
 
 import { CAPTCHA_REQUIRED_TEXT } from './data.js';
 import { buildJsonPayload } from './submit.js';
+import { setupWidgets } from './widget-glue.js';
 import {
   bootForm, captchaAction, captchaEnabled, captchaSelector, captchaSolved, captchaTokenKey,
   ensureStatusEl, ensureSubmitButton, escapeSelector, findAction, findNode,
@@ -35,6 +36,7 @@ function modalBehavior(config) {
 
 export const modalProfile = {
   mode: 'modal',
+  payloadEncoding: 'json',
   submitMethod: (config) => (config.submit && config.submit.method) || 'POST',
   controllerOpts: () => ({}),
   setup: (ctx) => setupModal(ctx),
@@ -56,6 +58,12 @@ function setupModal(ctx) {
     : (typeof window !== 'undefined' ? window.jQuery || null : null);
   const behavior = modalBehavior(config);
   const qsa = (selector, scope = form) => queryAll(scope, selector);
+
+  // The same widgets the page profile uses are mounted from the config. The
+  // modal keeps ownership of its own captcha lifecycle, actions and response
+  // presentation; the glue supplies widget state and the shared submit hooks.
+  const widgets = setupWidgets(ctx, { wireSubmit: false, wireActions: false, captcha: false });
+  const widgetHooks = widgets.extras.submitHooks;
 
   // Derived ids are the only fallback; no production form name is baked in.
   const fallback = (suffix) => [`${name}-${suffix}`];
@@ -269,6 +277,7 @@ function setupModal(ctx) {
     hideError();
     hideSuccess();
     form.classList.remove('was-validated');
+    widgets.extras.resetWidgets();
     setGroupsVisible(true);
     const notice = noticeEl();
     if (notice) notice.classList.add('d-none');
@@ -335,45 +344,63 @@ function setupModal(ctx) {
 
   let failed = false;
 
+  const modalBefore = () => {
+    failed = false;
+    for (const field of captchaFields) syncCaptchaState(field);
+    if (isCaptchaBlocked()) {
+      showError(errorCopy('E_CAPTCHA_REQUIRED', CAPTCHA_REQUIRED_TEXT));
+      form.classList.add('was-validated');
+      return false;
+    }
+    form.classList.remove('was-validated');
+    return true;
+  };
+
+  const modalTokens = (c) => {
+    const tokens = {};
+    for (const field of captchaFields) {
+      const key = captchaTokenKey(field, config);
+      const token = Captcha && Captcha.token ? (Captcha.token(captchaSelector(field)) || '') : '';
+      tokens[key] = token;
+      if (token) controller.setCaptchaToken(field.name, token);
+    }
+    return tokens;
+  };
+
+  const jsonRequest = (tokens) => {
+    const primary = captchaFields[0];
+    const primaryToken = primary ? (tokens[captchaTokenKey(primary, config)] || '') : '';
+    const payload = buildJsonPayload(form, controller, primaryToken);
+    for (const [key, value] of Object.entries(tokens)) payload[key] = value;
+    return {
+      url: form.getAttribute('action') || endpoint,
+      init: {
+        method: config.submit.method || 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    };
+  };
+
   wireSubmit(ctx, {
     triggers: () => [submitBtn].filter(Boolean),
     actions: () => [submitBtn].filter(Boolean),
-    before: () => {
-      failed = false;
-      for (const field of captchaFields) syncCaptchaState(field);
-      if (isCaptchaBlocked()) {
-        showError(errorCopy('E_CAPTCHA_REQUIRED', CAPTCHA_REQUIRED_TEXT));
-        form.classList.add('was-validated');
-        return false;
-      }
-      form.classList.remove('was-validated');
-      return true;
+    before: (c) => {
+      if (widgetHooks.before && widgetHooks.before(c) === false) return false;
+      return modalBefore();
     },
-    invalid: () => { form.classList.add('was-validated'); },
-    tokens: (c) => {
-      const tokens = {};
-      for (const field of captchaFields) {
-        const key = captchaTokenKey(field, config);
-        const token = Captcha && Captcha.token ? (Captcha.token(captchaSelector(field)) || '') : '';
-        tokens[key] = token;
-        if (token) controller.setCaptchaToken(field.name, token);
-      }
-      return tokens;
+    invalid: (c) => {
+      if (widgetHooks.invalid) widgetHooks.invalid(c);
+      form.classList.add('was-validated');
     },
+    guards: (c) => (widgetHooks.guards ? widgetHooks.guards(c) !== false : true),
+    tokens: (c) => ({ ...((widgetHooks.tokens && widgetHooks.tokens(c)) || {}), ...modalTokens(c) }),
     request: (c, tokens) => {
-      const primary = captchaFields[0];
-      const primaryToken = primary ? (tokens[captchaTokenKey(primary, config)] || '') : '';
-      const payload = buildJsonPayload(form, controller, primaryToken);
-      for (const [key, value] of Object.entries(tokens)) payload[key] = value;
-      return {
-        url: form.getAttribute('action') || endpoint,
-        init: {
-          method: config.submit.method || 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
-      };
+      const shared = widgetHooks.request ? widgetHooks.request(c, tokens) : null;
+      if (!shared) return jsonRequest(tokens);
+      return { ...shared, url: form.getAttribute('action') || shared.url };
     },
+    busy: (c) => { if (widgetHooks.busy) widgetHooks.busy(c); },
     response: (c, ok, body) => {
       if (!ok || !body || !body.success) {
         failed = true;
@@ -393,7 +420,10 @@ function setupModal(ctx) {
       applySuccessHooks();
     },
     error: () => { failed = true; },
-    finish: () => { if (failed) restoreSubmit(); },
+    finish: (c) => {
+      if (widgetHooks.finish) widgetHooks.finish(c);
+      if (failed) restoreSubmit();
+    },
   });
 
   // `state` is shared with the runtime; the modal keeps its own lifecycle flags
@@ -401,6 +431,11 @@ function setupModal(ctx) {
   void state;
 
   return {
+    subscribe: widgets.subscribe,
+    extras: {
+      refetchAddress: widgets.extras.refetchAddress,
+      resetWidgets: widgets.extras.resetWidgets,
+    },
     form,
     controller,
     binder: ctx.binder,
