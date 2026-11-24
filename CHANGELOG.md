@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-11-24
+
+### Fixed
+
+- `tools/check-add-property-core.mjs`: the frozen-baseline id contract now
+  exempts widget-owned ids derived from config (`label_<name>`, map
+  `<element_id|name>-picker`, captcha `<element_id|name>-widget`), so the
+  MOD-17 derived picker id no longer fails the add-property gate. Truly
+  foreign ids are still reported; a regression test renames the map widget
+  and injects an unknown id (MOD-18).
+
 ## [1.0.9] - 2026-11-23
 
 ### Added
