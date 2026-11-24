@@ -8,16 +8,32 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadYaml } from '../tools/yaml.mjs';
-import { structureChecks } from '../tools/check-add-property-core.mjs';
+import {
+  copyChecks,
+  extractFormSlice,
+  normalize,
+  structureChecks,
+} from '../tools/check-add-property-core.mjs';
 import { FormRender } from '../runtime/render.js';
+import { inlineMarkdown } from '../runtime/html.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE = join(ROOT, 'adapters', 'jekyll', 'test', 'fixtures', 'add-property.yml');
+const BASELINE = join(ROOT, 'adapters', 'jekyll', 'test', 'fixtures', 'add-property.html');
 const RENAMES = {
   district_settlement: 'microdistrict_pick',
   type_address: 'address_kind',
   location_widget: 'place_picker',
 };
+
+function renameWidget(value, from, to) {
+  if (typeof value === 'string') return value === from ? to : value;
+  if (Array.isArray(value)) return value.map((item) => renameWidget(item, from, to));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, renameWidget(item, from, to)]));
+  }
+  return value;
+}
 
 function renameValue(value) {
   if (typeof value === 'string') {
@@ -72,4 +88,28 @@ test('no gate wrapper hard-codes the retired field names', () => {
       );
     }
   }
+});
+
+test('config-derived widget ids are not orphans, foreign ids still are (MOD-18)', () => {
+  const config = renameWidget(loadYaml(FIXTURE), 'map_widget', 'map_pin');
+  const baselineSlice = normalize(
+    extractFormSlice(readFileSync(BASELINE, 'utf8').replace(/^\uFEFF/, '')),
+    { alpine: true, dataAttr: false },
+  );
+  const html = FormRender.render(config);
+
+  assert.match(html, /id="map_pin-picker"/);
+  assert.doesNotMatch(html, /id="map-picker"/);
+
+  const failures = (markup) => copyChecks(config, markup, baselineSlice, inlineMarkdown)
+    .filter(({ ok }) => !ok)
+    .map(({ label }) => label);
+
+  assert.deepEqual(failures(html), [], 'the renamed picker id must be derived from the config, not reported as an orphan');
+
+  const withForeignId = html.replace('</form>', '<div id="unexpected-foreign-id"></div></form>');
+  assert.ok(
+    failures(withForeignId).some((label) => label.includes('unexpected-foreign-id')),
+    'an id no config widget owns must still fail the orphan check',
+  );
 });

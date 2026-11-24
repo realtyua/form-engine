@@ -4,6 +4,9 @@
 // form; every expectation lives here. Expectations are derived from the config
 // (type: autocomplete, type: widgets + widget: location), never from a field
 // name, so renaming a field cannot silently weaken or break the gate (MOD-14).
+// The id contract also whitelists only widget-owned ids that the config itself
+// derives (MOD-18), so a renamed map/captcha widget is not an orphan while a
+// genuinely foreign id still fails.
 
 const CONTENT_TYPES = new Set(['alert', 'badge', 'heading', 'image', 'list', 'paragraph', 'raw']);
 
@@ -57,6 +60,23 @@ export function collectIds(html) {
   const out = new Set();
   for (const m of html.matchAll(/\bid="([^"]+)"/g)) out.add(m[1]);
   return out;
+}
+
+// Ids the renderer owns and derives from widget config. MOD-17 changed the map
+// picker from a fixed `map-picker` to `${element_id || name || 'map'}-picker`,
+// which is legitimately absent from the frozen pre-engine baseline; captcha
+// uses the same `${element_id || name}-widget` rule. Only these derived ids
+// are exempt from the orphan check - every other new id is still a failure.
+export function derivedWidgetIds(config) {
+  const ids = new Set();
+  everyField(config, (field) => {
+    if (field.type !== 'widgets' || !field.name) return;
+    ids.add(`label_${field.name}`);
+    const base = field.element_id || field.name;
+    if (field.widget === 'captcha') ids.add(`${base}-widget`);
+    if (field.widget === 'map') ids.add(`${base || 'map'}-picker`);
+  });
+  return ids;
 }
 
 function escapeRegExp(value) {
@@ -184,7 +204,9 @@ export function copyChecks(config, html, baselineSlice, inlineMarkdown) {
     check(engineNorm.includes(text), `copy in render: ${text.slice(0, 60)}`);
   }
 
-  const orphan = [...collectIds(html)].filter((id) => !collectIds(baselineSlice).has(id));
+  const baselineIds = collectIds(baselineSlice);
+  const derivedIds = derivedWidgetIds(config);
+  const orphan = [...collectIds(html)].filter((id) => !baselineIds.has(id) && !derivedIds.has(id));
   check(orphan.length === 0, `engine ids all existed in the old page${orphan.length ? `: ${orphan.join(', ')}` : ''}`);
   return checks;
 }
